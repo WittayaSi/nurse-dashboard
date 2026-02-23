@@ -1,0 +1,1737 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nursing Organization Dashboard</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Config -->
+    <script src="config.js"></script>
+
+    <style>
+        body { font-family: 'Sarabun', sans-serif; background: linear-gradient(135deg, #e0f2fe 0%, #f0fdf4 100%); }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+        }
+        .card-kpi {
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            border-radius: 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+            border: 1px solid #e2e8f0;
+            transition: all 0.3s ease;
+        }
+        .card-kpi:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+        }
+        .gradient-header {
+            background: linear-gradient(135deg, #6366f1 0%, #14b8a6 100%);
+        }
+        .stat-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-6 min-h-screen">
+
+    <!-- Header Section -->
+    <header class="glass-panel p-4 mb-6">
+        <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="gradient-header p-3 rounded-xl shadow-lg text-white">
+                    <i class="fa-solid fa-user-nurse text-2xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold text-gray-800">Nursing Organization Dashboard</h1>
+                    <p class="text-xs text-gray-500">Real-time Workforce Monitoring & Analytics</p>
+                </div>
+            </div>
+
+            <!-- Filters -->
+            <div class="flex flex-wrap items-center gap-3">
+                
+                <!-- Department Type Selector -->
+                <div class="flex items-center bg-white rounded-xl px-4 py-2 border-2 border-indigo-200 shadow-sm">
+                    <i class="fa-solid fa-layer-group text-indigo-500 mr-2"></i>
+                    <label class="text-xs text-gray-500 mr-2 font-semibold">ประเภท:</label>
+                    <select id="deptSelector" onchange="updateWardOptions()" class="text-sm font-bold text-indigo-700 bg-transparent outline-none cursor-pointer">
+                        <option value="IPD">ผู้ป่วยใน (IPD)</option>
+                        <option value="OPD">ผู้ป่วยนอก (OPD)</option>
+                    </select>
+                </div>
+
+                <!-- Ward Selector -->
+                <div class="flex items-center bg-white rounded-xl px-4 py-2 border border-gray-200 shadow-sm">
+                    <i class="fa-solid fa-hospital-user text-gray-400 mr-2"></i>
+                    <label class="text-xs text-gray-500 mr-2">หน่วยงาน:</label>
+                    <select id="wardSelector" onchange="fetchData()" class="text-sm font-semibold text-gray-700 bg-transparent outline-none cursor-pointer min-w-[150px]">
+                        <!-- Populated by JS -->
+                    </select>
+                </div>
+
+                <!-- Date Selector -->
+                <div class="flex items-center bg-white rounded-xl px-4 py-2 border border-gray-200 shadow-sm">
+                    <i class="fa-regular fa-calendar text-gray-400 mr-2"></i>
+                    <label class="text-xs text-gray-500 mr-2">วันที่:</label>
+                    <input type="date" id="dateSelector" onchange="fetchData()" class="text-sm font-semibold text-gray-700 bg-transparent outline-none cursor-pointer">
+                </div>
+
+                <!-- Settings Button -->
+                <button onclick="openSettings()" class="bg-white text-gray-600 hover:text-indigo-600 border border-gray-200 w-10 h-10 rounded-xl shadow-sm transition-all flex items-center justify-center mr-2">
+                    <i class="fa-solid fa-gear"></i>
+                </button>
+
+                <!-- Refresh Button -->
+                <button onclick="fetchData()" class="gradient-header hover:opacity-90 text-white w-10 h-10 rounded-xl shadow-lg transition-all flex items-center justify-center">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- Left Column: KPIs & Workforce -->
+        <div class="lg:col-span-5 flex flex-col gap-6">
+            
+            <!-- Productivity & CMI Hero Cards -->
+            <div class="grid grid-cols-2 gap-4">
+                <!-- Productivity - Hero Card -->
+                <div class="relative overflow-hidden rounded-2xl p-6 text-center text-white shadow-xl" 
+                     style="background: linear-gradient(135deg, #0d9488 0%, #14b8a6 50%, #2dd4bf 100%);">
+                    <div class="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2"></div>
+                    <div class="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full translate-y-1/2 -translate-x-1/2"></div>
+                    <div class="relative z-10">
+                        <div class="flex items-center justify-center gap-2 mb-3">
+                            <div class="bg-white/20 p-2 rounded-lg">
+                                <i class="fa-solid fa-chart-line text-xl"></i>
+                            </div>
+                            <h3 class="text-white/90 text-sm font-bold uppercase tracking-wider">Productivity</h3>
+                        </div>
+                        <div class="text-5xl font-extrabold mb-2 drop-shadow-lg" id="prodValue">86.97%</div>
+                        <div class="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-1.5 rounded-full text-sm font-semibold">
+                            <i class="fa-solid fa-bullseye"></i>
+                            <span>Target: 85%</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- CMI (IPD) / Patient Visit (OPD) - Hero Card -->
+                <div id="secondMetricCard" class="relative overflow-hidden rounded-2xl p-6 text-center text-white shadow-xl" 
+                     style="background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 50%, #a78bfa 100%);">
+                    <div class="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2"></div>
+                    <div class="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full translate-y-1/2 -translate-x-1/2"></div>
+                    <div class="relative z-10">
+                        <!-- IPD: CMI -->
+                        <div id="cmiSection">
+                            <div class="flex items-center justify-center gap-2 mb-3">
+                                <div class="bg-white/20 p-2 rounded-lg">
+                                    <i class="fa-solid fa-weight-scale text-xl"></i>
+                                </div>
+                                <h3 class="text-white/90 text-sm font-bold uppercase tracking-wider">CMI</h3>
+                            </div>
+                            <div class="text-5xl font-extrabold mb-2 drop-shadow-lg" id="cmiValue">1.45</div>
+                            <div class="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-1.5 rounded-full text-sm font-semibold">
+                                <i class="fa-solid fa-hospital"></i>
+                                <span>Case Mix Index</span>
+                            </div>
+                        </div>
+                        <!-- OPD: Patient Visit -->
+                        <div id="patientVisitSection" class="hidden">
+                            <div class="flex items-center justify-center gap-2 mb-3">
+                                <div class="bg-white/20 p-2 rounded-lg">
+                                    <i class="fa-solid fa-user-group text-xl"></i>
+                                </div>
+                                <h3 class="text-white/90 text-sm font-bold uppercase tracking-wider">Patient Visit</h3>
+                            </div>
+                            <div class="text-5xl font-extrabold mb-2 drop-shadow-lg" id="patientVisitValue">1,250</div>
+                            <div class="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-1.5 rounded-full text-sm font-semibold">
+                                <i class="fa-solid fa-calendar-day"></i>
+                                <span>ผู้ป่วยต่อวัน</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Workforce Card -->
+            <div class="card-kpi p-5 flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <div class="bg-indigo-100 p-4 rounded-xl">
+                        <i class="fa-solid fa-users text-2xl text-indigo-600"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-gray-500 text-xs font-bold uppercase tracking-wider">Total Workforce</h3>
+                        <div class="text-3xl font-bold text-indigo-600" id="totalWorkforce">1,027</div>
+                    </div>
+                </div>
+                <div class="stat-badge bg-indigo-100 text-indigo-700">
+                    <i class="fa-solid fa-user-nurse mr-1"></i>พยาบาลทั้งหมด
+                </div>
+            </div>
+
+            <!-- Workforce Status Header -->
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <div class="w-1.5 h-6 bg-gradient-to-b from-pink-500 to-pink-600 rounded-full"></div>
+                    <h2 class="font-bold text-gray-800">Workforce Status</h2>
+                    <span id="deptLabel" class="text-xs font-medium text-gray-400 bg-gray-100 px-2 py-1 rounded-lg"></span>
+                </div>
+            </div>
+
+            <!-- IPD VIEW: Shift Breakdown Table -->
+            <div id="ipdWorkforcePanel" class="flex flex-col gap-4">
+                <div class="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-gradient-to-r from-gray-50 to-gray-100 text-gray-600 font-semibold">
+                            <tr>
+                                <th class="px-4 py-3">เวร (Shift)</th>
+                                <th class="px-4 py-3 text-center">
+                                    <span class="text-pink-600"><i class="fa-solid fa-user-nurse mr-1"></i>RN</span>
+                                </th>
+                                <th class="px-4 py-3 text-center">
+                                    <span class="text-amber-600"><i class="fa-solid fa-user-gear mr-1"></i>PN/NA</span>
+                                </th>
+                                <th class="px-4 py-3 text-center">รวม</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            <!-- Morning -->
+                            <tr class="hover:bg-orange-50/50 transition-colors">
+                                <td class="px-4 py-3 font-semibold text-gray-700">
+                                    <span class="w-3 h-3 rounded-full bg-gradient-to-r from-orange-400 to-amber-400 inline-block mr-2 shadow-sm"></span>
+                                    ☀️ เช้า (07:00-15:00)
+                                </td>
+                                <td class="px-4 py-3 text-center font-bold text-pink-600" id="shiftM_RN">412</td>
+                                <td class="px-4 py-3 text-center font-bold text-amber-600" id="shiftM_Non">198</td>
+                                <td class="px-4 py-3 text-center font-bold text-gray-800 bg-gray-50" id="shiftM_Total">610</td>
+                            </tr>
+                            <!-- Afternoon -->
+                            <tr class="hover:bg-blue-50/50 transition-colors">
+                                <td class="px-4 py-3 font-semibold text-gray-700">
+                                    <span class="w-3 h-3 rounded-full bg-gradient-to-r from-blue-400 to-cyan-400 inline-block mr-2 shadow-sm"></span>
+                                    🌤️ บ่าย (15:00-23:00)
+                                </td>
+                                <td class="px-4 py-3 text-center font-bold text-pink-600" id="shiftA_RN">185</td>
+                                <td class="px-4 py-3 text-center font-bold text-amber-600" id="shiftA_Non">89</td>
+                                <td class="px-4 py-3 text-center font-bold text-gray-800 bg-gray-50" id="shiftA_Total">274</td>
+                            </tr>
+                            <!-- Midnight -->
+                            <tr class="hover:bg-indigo-50/50 transition-colors">
+                                <td class="px-4 py-3 font-semibold text-gray-700">
+                                    <span class="w-3 h-3 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 inline-block mr-2 shadow-sm"></span>
+                                    🌙 ดึก (23:00-07:00)
+                                </td>
+                                <td class="px-4 py-3 text-center font-bold text-pink-600" id="shiftN_RN">98</td>
+                                <td class="px-4 py-3 text-center font-bold text-amber-600" id="shiftN_Non">45</td>
+                                <td class="px-4 py-3 text-center font-bold text-gray-800 bg-gray-50" id="shiftN_Total">143</td>
+                            </tr>
+                        </tbody>
+                        <tfoot class="bg-gradient-to-r from-indigo-50 to-purple-50 font-bold text-gray-800 border-t-2 border-indigo-200">
+                            <tr>
+                                <td class="px-4 py-4">📊 รวม 24 ชม.</td>
+                                <td class="px-4 py-4 text-center text-pink-600 text-lg" id="totalDay_RN">695</td>
+                                <td class="px-4 py-4 text-center text-amber-600 text-lg" id="totalDay_Non">332</td>
+                                <td class="px-4 py-4 text-center text-xl text-indigo-700" id="totalDay_All">1,027</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <!-- Staff Mix Ratio -->
+                <div class="card-kpi p-5 flex items-center justify-between">
+                    <div class="flex flex-col gap-2">
+                        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">Staff Mix Ratio</div>
+                        <div class="text-3xl font-bold text-pink-600"><span id="rnRatio">67.7</span>% RN</div>
+                        <div class="flex gap-3 text-xs">
+                            <span class="flex items-center gap-1">
+                                <span class="w-2 h-2 bg-pink-500 rounded-full"></span>
+                                RN: <strong id="rnCount">695</strong>
+                            </span>
+                            <span class="flex items-center gap-1">
+                                <span class="w-2 h-2 bg-amber-500 rounded-full"></span>
+                                PN/NA: <strong id="pnCount">332</strong>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="w-28 h-28 relative">
+                        <canvas id="staffMixChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- OPD VIEW -->
+            <div id="opdWorkforcePanel" class="hidden grid-cols-2 gap-4">
+                <div class="card-kpi p-5 text-center border-l-4 border-pink-500">
+                    <div class="text-pink-700 font-bold mb-2">👩‍⚕️ พยาบาล (RN)</div>
+                    <div class="text-4xl font-bold text-pink-600" id="opdRn">312</div>
+                    <div class="text-xs text-gray-400 mt-1">คน</div>
+                </div>
+                <div class="card-kpi p-5 text-center border-l-4 border-amber-500">
+                    <div class="text-amber-700 font-bold mb-2">🧑‍⚕️ ผู้ช่วย (PN/NA)</div>
+                    <div class="text-4xl font-bold text-amber-600" id="opdNon">173</div>
+                    <div class="text-xs text-gray-400 mt-1">คน</div>
+                </div>
+            </div>
+
+            <!-- Skill Mix Section -->
+            <div class="flex items-center gap-2">
+                <div class="w-1.5 h-6 bg-gradient-to-b from-emerald-500 to-emerald-600 rounded-full"></div>
+                <h2 class="font-bold text-gray-800">Skill Mix / Competency</h2>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4">
+                <div class="card-kpi p-4 text-center bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-200">
+                    <div class="text-emerald-700 font-bold text-sm mb-1">🎯 ทักษะผสม (Total)</div>
+                    <div class="text-2xl font-bold text-emerald-600" id="smTotal">495</div>
+                    <div class="text-xs text-emerald-500">จำนวนพยาบาลทักษะผสม</div>
+                </div>
+                <div class="card-kpi p-4 text-center bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-200">
+                    <div class="text-emerald-700 font-bold text-sm mb-1">🌙 เวรดึก (On Duty)</div>
+                    <div class="text-2xl font-bold text-emerald-600" id="smOnDuty">79</div>
+                    <div class="text-xs text-emerald-500">Ratio: <strong id="smRatio">1:6</strong></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Charts -->
+        <div class="lg:col-span-7 flex flex-col gap-6">
+            
+            <!-- CAP Assessment Status -->
+            <div class="card-kpi p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-gray-800 font-bold flex items-center gap-2">
+                        <i class="fa-solid fa-chart-pie text-indigo-500"></i>
+                        CAP Assessment Status
+                    </h3>
+                    <div class="flex gap-4 text-xs">
+                        <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-emerald-500"></span> เหมาะสม</span>
+                        <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-amber-500"></span> ต้องปรับปรุง</span>
+                        <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-red-500"></span> ขาดแคลน</span>
+                    </div>
+                </div>
+                <div class="h-48 w-full">
+                    <canvas id="capStatusChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Ward Performance Chart -->
+            <div class="card-kpi p-6 flex-grow flex flex-col">
+                <div class="flex justify-between items-start mb-4">
+                    <div>
+                        <h3 class="text-gray-800 font-bold flex items-center gap-2">
+                            <i class="fa-solid fa-hospital text-teal-500"></i>
+                            <span id="chartTitle">Ward Performance</span>
+                        </h3>
+                        <p class="text-xs text-gray-500 mt-1">เปรียบเทียบ Productivity ตามหอผู้ป่วย/แผนก</p>
+                    </div>
+                    <div class="flex flex-col gap-1 text-xs">
+                        <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-sm bg-indigo-500"></div> <span class="text-gray-500">Over (>100%)</span></div>
+                        <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-sm bg-emerald-500"></div> <span class="text-gray-500">Appropriate</span></div>
+                        <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-sm bg-red-400"></div> <span class="text-gray-500">Under (<85%)</span></div>
+                    </div>
+                </div>
+
+                <div class="relative w-full flex-grow min-h-[350px]">
+                    <canvas id="wardChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Google Sheets Connection Section -->
+    <!-- Google Sheets Connection Section (Moved to Settings Modal) -->
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4 transition-opacity duration-300 opacity-0 pointer-events-none" style="transition: opacity 0.3s ease;">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden transform transition-all scale-95" id="settingsContent">
+            <!-- Header -->
+            <div class="gradient-header p-4 flex justify-between items-center text-white">
+                <h3 class="font-bold text-lg flex items-center gap-2"><i class="fa-solid fa-gear"></i> Settings</h3>
+                <button onclick="closeSettings()" class="hover:bg-white/20 rounded-lg w-8 h-8 flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+            
+            <!-- Content -->
+            <div class="p-6 max-h-[80vh] overflow-y-auto">
+                <div class="flex items-center gap-4 mb-6">
+                    <img src="https://www.gstatic.com/images/branding/product/2x/sheets_2020q4_48dp.png" alt="Google Sheets" class="w-12 h-12">
+                    <div>
+                        <h3 class="font-bold text-gray-800 text-lg">Connect to Google Sheets</h3>
+                        <p class="text-xs text-gray-500">เชื่อมต่อข้อมูลจาก Google Sheets (Share Link)</p>
+                    </div>
+                </div>
+                
+                <!-- Main URL -->
+                <div class="mb-5">
+                    <label class="text-xs font-bold text-gray-700 mb-1 block uppercase tracking-wider">📎 Google Sheets URL</label>
+                    <input type="text" id="settingMainUrl" placeholder="https://docs.google.com/spreadsheets/d/YOUR_ID/edit..." 
+                           class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 focus:outline-none transition-all text-sm">
+                    <p class="text-[10px] text-gray-400 mt-2 flex items-center gap-1">
+                        <i class="fa-solid fa-circle-info"></i> ใช้ลิงก์จากปุ่ม <b>Share</b> -> <b>Copy link</b> (Anyone with the link)
+                    </p>
+                </div>
+                
+                <!-- Sheet Names -->
+                <div class="mb-5">
+                    <label class="text-xs font-bold text-gray-700 mb-2 block uppercase tracking-wider">📄 Sheet Names / GIDs / URL</label>
+                    <div class="space-y-3">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-semibold w-24 text-gray-500">Daily Summary:</span>
+                            <input type="text" id="settingSummarySheet" value="Daily_Summary" placeholder="Name, GID, or Sheet URL" 
+                                   class="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:border-indigo-400 focus:outline-none">
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-semibold w-24 text-gray-500">IPD Workforce:</span>
+                            <input type="text" id="settingIpdSheet" value="IPD_Workforce" placeholder="Name, GID, or Sheet URL" 
+                                   class="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:border-pink-400 focus:outline-none">
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-semibold w-24 text-gray-500">OPD Workforce:</span>
+                            <input type="text" id="settingOpdSheet" value="OPD_Workforce" placeholder="Name, GID, or Sheet URL" 
+                                   class="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:border-teal-400 focus:outline-none">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-amber-50 border border-amber-100 rounded-xl p-3 mb-6">
+                    <p class="text-[11px] text-amber-800 leading-relaxed">
+                        <b>Tip:</b> เพื่อความง่ายที่สุด ให้เปิด Sheet ที่ต้องการ แล้ว <b>ก๊อปปี้ URL ทั้งหมด</b> จากด้านบนมาวางในช่องได้เลยครับ (ระบบจะดึงเลข GID ให้เอง)
+                    </p>
+                </div>
+                
+                <button onclick="connectAllSheets()" class="gradient-header text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:shadow-xl hover:opacity-95 transition-all flex items-center gap-2 w-full justify-center transform active:scale-95">
+                    <i class="fa-solid fa-link"></i>
+                    Connect & Save
+                </button>
+                
+                <div id="sheetsStatus" class="mt-4 px-4 py-3 rounded-xl bg-gray-50 text-gray-500 text-xs flex items-center justify-center gap-2 border border-gray-100">
+                    <i class="fa-solid fa-circle-check text-gray-300"></i>
+                    <span>Ready to connect</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Global Loading Overlay -->
+    <div id="globalLoading" class="fixed inset-0 bg-white/80 backdrop-blur-sm z-[60] hidden flex flex-col items-center justify-center transition-opacity duration-300 opacity-0 pointer-events-none">
+        <div class="bg-white p-6 rounded-2xl shadow-2xl flex flex-col items-center gap-4 border border-gray-100">
+            <div class="relative w-16 h-16">
+                <div class="absolute inset-0 border-4 border-gray-100 rounded-full"></div>
+                <div class="absolute inset-0 border-4 border-indigo-500 rounded-full border-t-transparent animate-spin"></div>
+            </div>
+            <div class="text-center">
+                <h3 class="text-lg font-bold text-gray-800">กำลังโหลดข้อมูล...</h3>
+                <p class="text-sm text-gray-500">Connecting to Google Sheets</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="text-center mt-6 text-gray-400 text-sm">
+        <p>Designed by <strong class="text-gray-600">Healthcare UI/UX</strong> | Nursing Organization Dashboard v2.1</p>
+    </footer>
+
+    <!-- Script -->
+    <script>
+        // --- Modal Logic ---
+        function openSettings() {
+            const modal = document.getElementById('settingsModal');
+            const content = document.getElementById('settingsContent');
+            
+            modal.classList.remove('hidden');
+            // Small delay to allow display:block to apply before opacity transition
+            setTimeout(() => {
+                modal.classList.remove('opacity-0', 'pointer-events-none');
+                content.classList.remove('scale-95');
+                content.classList.add('scale-100');
+            }, 10);
+        }
+
+        function closeSettings() {
+            const modal = document.getElementById('settingsModal');
+            const content = document.getElementById('settingsContent');
+            
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            content.classList.remove('scale-100');
+            content.classList.add('scale-95');
+            
+            // Wait for transition to finish before hiding
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        // Close on click outside
+        document.getElementById('settingsModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeSettings();
+            }
+        });
+
+        function toggleLoading(show) {
+            const el = document.getElementById('globalLoading');
+            if (show) {
+                el.classList.remove('hidden');
+                // Small delay to allow display:block to apply before opacity transition
+                setTimeout(() => el.classList.remove('opacity-0', 'pointer-events-none'), 10);
+            } else {
+                el.classList.add('opacity-0', 'pointer-events-none');
+                setTimeout(() => el.classList.add('hidden'), 300);
+            }
+        }
+
+        // --- Configuration ---
+        const wardsIPD = [
+            "18 อายุรกรรม", "17 ผู้ป่วยหนัก", "10 ศัลยกรรม", "6 EENT", 
+            "4 ออร์โธปิดิกส์", "3 กุมาร", "2 สูติ-นรีเวช", "1 ฉุกเฉิน ICU"
+        ];
+        const wardsOPD = [
+            "OPD อายุรกรรม", "OPD ศัลยกรรม", "OPD สูติ-นรีเวช", "OPD เด็ก", 
+            "ห้องฉุกเฉิน (ER)", "เภสัชกรรม", "ทันตกรรม", "ลงทะเบียน"
+        ];
+
+        // Chart instances
+        let mixChart = null;
+        let capChart = null;
+        let wardChart = null;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('dateSelector').valueAsDate = new Date();
+            updateWardOptions();
+        });
+
+        function updateWardOptions() {
+            const dept = document.getElementById('deptSelector').value;
+            const wardSelect = document.getElementById('wardSelector');
+            const wardList = dept === 'IPD' ? wardsIPD : wardsOPD;
+
+            wardSelect.innerHTML = '<option value="all">📊 ภาพรวม (All)</option>';
+            wardList.forEach(ward => {
+                const option = document.createElement('option');
+                option.value = ward;
+                option.text = ward;
+                wardSelect.appendChild(option);
+            });
+            
+            document.getElementById('deptLabel').innerText = dept;
+            fetchData();
+        }
+
+        // fetchData is defined in Google Sheets section below
+
+        function updateUI(data) {
+            const dept = data.deptType;
+
+            // KPIs
+            document.getElementById('prodValue').innerText = data.productivity + "%";
+            document.getElementById('totalWorkforce').innerText = data.totalWorkforce.toLocaleString();
+
+            // Toggle CMI vs Patient Visit
+            if (dept === 'IPD') {
+                document.getElementById('cmiSection').classList.remove('hidden');
+                document.getElementById('patientVisitSection').classList.add('hidden');
+                document.getElementById('cmiValue').innerText = data.cmi;
+            } else {
+                document.getElementById('cmiSection').classList.add('hidden');
+                document.getElementById('patientVisitSection').classList.remove('hidden');
+                document.getElementById('patientVisitValue').innerText = data.patientVisit.toLocaleString();
+            }
+
+            // Toggle panels
+            if (dept === 'IPD') {
+                document.getElementById('ipdWorkforcePanel').classList.remove('hidden');
+                document.getElementById('ipdWorkforcePanel').classList.add('flex');
+                document.getElementById('opdWorkforcePanel').classList.add('hidden');
+                document.getElementById('opdWorkforcePanel').classList.remove('grid');
+
+                // Update shift table
+                const s = data.shifts;
+                document.getElementById('shiftM_RN').innerText = s.morning.rn;
+                document.getElementById('shiftM_Non').innerText = s.morning.nonRn;
+                document.getElementById('shiftM_Total').innerText = s.morning.rn + s.morning.nonRn;
+                
+                document.getElementById('shiftA_RN').innerText = s.afternoon.rn;
+                document.getElementById('shiftA_Non').innerText = s.afternoon.nonRn;
+                document.getElementById('shiftA_Total').innerText = s.afternoon.rn + s.afternoon.nonRn;
+                
+                document.getElementById('shiftN_RN').innerText = s.midnight.rn;
+                document.getElementById('shiftN_Non').innerText = s.midnight.nonRn;
+                document.getElementById('shiftN_Total').innerText = s.midnight.rn + s.midnight.nonRn;
+
+                const totalRN = s.morning.rn + s.afternoon.rn + s.midnight.rn;
+                const totalNon = s.morning.nonRn + s.afternoon.nonRn + s.midnight.nonRn;
+                document.getElementById('totalDay_RN').innerText = totalRN;
+                document.getElementById('totalDay_Non').innerText = totalNon;
+                document.getElementById('totalDay_All').innerText = (totalRN + totalNon).toLocaleString();
+
+                // Staff mix
+                const total = totalRN + totalNon;
+                const rnPerc = total > 0 ? ((totalRN / total) * 100).toFixed(1) : 0;
+                document.getElementById('rnRatio').innerText = rnPerc;
+                document.getElementById('rnCount').innerText = totalRN;
+                document.getElementById('pnCount').innerText = totalNon;
+                renderMixChart(parseFloat(rnPerc), 100 - parseFloat(rnPerc));
+
+            } else {
+                document.getElementById('opdWorkforcePanel').classList.remove('hidden');
+                document.getElementById('opdWorkforcePanel').classList.add('grid');
+                document.getElementById('ipdWorkforcePanel').classList.add('hidden');
+                document.getElementById('ipdWorkforcePanel').classList.remove('flex');
+
+                document.getElementById('opdRn').innerText = data.workforce.rn;
+                document.getElementById('opdNon').innerText = data.workforce.nonRn;
+            }
+
+            // Skill Mix
+            document.getElementById('smTotal').innerText = data.skillMix.total;
+            document.getElementById('smOnDuty').innerText = data.skillMix.onDuty;
+            document.getElementById('smRatio').innerText = data.skillMix.ratio;
+
+            // Charts
+            renderCapChart(data.capStatus);
+            renderWardChart(data.wardData, dept);
+        }
+
+        // --- Chart Renderers ---
+        function renderMixChart(rn, pn) {
+            const ctx = document.getElementById('staffMixChart').getContext('2d');
+            if (mixChart) mixChart.destroy();
+
+            mixChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['RN', 'PN/NA'],
+                    datasets: [{
+                        data: [rn, pn],
+                        backgroundColor: ['#ec4899', '#f59e0b'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '70%',
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        function renderCapChart(capData) {
+            const ctx = document.getElementById('capStatusChart').getContext('2d');
+            if (capChart) capChart.destroy();
+
+            capChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['เหมาะสม (Suitable)', 'ปรับปรุง (Improve)', 'ขาดแคลน (Shortage)'],
+                    datasets: [{
+                        data: [capData.suitable, capData.improve, capData.shortage],
+                        backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+                        borderRadius: 8,
+                        barThickness: 50
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { display: false, beginAtZero: true },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        function renderWardChart(wardData, deptType) {
+            const ctx = document.getElementById('wardChart').getContext('2d');
+            if (wardChart) wardChart.destroy();
+
+            const colors = wardData.map(d => {
+                if (d.prod >= 100) return '#6366f1';
+                if (d.prod >= 85) return '#10b981';
+                return '#f87171';
+            });
+
+            document.getElementById('chartTitle').innerText = deptType === 'IPD' ? 
+                'Ward Performance (IPD)' : 'Unit Performance (OPD)';
+
+            wardChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: wardData.map(d => d.name),
+                    datasets: [{
+                        label: 'Productivity %',
+                        data: wardData.map(d => d.prod),
+                        backgroundColor: colors,
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { 
+                            grid: { color: '#f3f4f6' },
+                            max: 120,
+                            ticks: { callback: v => v + '%' }
+                        },
+                        y: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        // --- Mock Data ---
+        function getMockData(dept, ward) {
+            if (dept === 'IPD') {
+                return {
+                    deptType: 'IPD',
+                    productivity: 86.97,
+                    cmi: 1.45,
+                    totalWorkforce: 1027,
+                    shifts: {
+                        morning: { rn: 412, nonRn: 198 },
+                        afternoon: { rn: 185, nonRn: 89 },
+                        midnight: { rn: 98, nonRn: 45 }
+                    },
+                    skillMix: { total: 495, onDuty: 79, ratio: '1:6' },
+                    capStatus: { suitable: 43, improve: 12, shortage: 5 },
+                    wardData: [
+                        { name: '17 ผู้ป่วยหนัก', prod: 95 },
+                        { name: '18 อายุรกรรม', prod: 89 },
+                        { name: '10 ศัลยกรรม', prod: 105 },
+                        { name: '6 EENT', prod: 78 },
+                        { name: '4 ออร์โธปิดิกส์', prod: 92 },
+                        { name: '3 กุมาร', prod: 88 },
+                        { name: '2 สูติ-นรีเวช', prod: 85 },
+                        { name: '1 ฉุกเฉิน ICU', prod: 110 }
+                    ]
+                };
+            } else {
+                return {
+                    deptType: 'OPD',
+                    productivity: 82.45,
+                    patientVisit: 1250,
+                    totalWorkforce: 485,
+                    workforce: { rn: 312, nonRn: 173 },
+                    skillMix: { total: 80, onDuty: 25, ratio: '1:8' },
+                    capStatus: { suitable: 35, improve: 8, shortage: 2 },
+                    wardData: [
+                        { name: 'ห้องฉุกเฉิน (ER)', prod: 115 },
+                        { name: 'OPD อายุรกรรม', prod: 92 },
+                        { name: 'OPD ศัลยกรรม', prod: 88 },
+                        { name: 'เภสัชกรรม', prod: 75 },
+                        { name: 'ลงทะเบียน', prod: 82 }
+                    ]
+                };
+            }
+        }
+
+        // --- Google Sheets Connection ---
+        let sheetsData = null; // Daily Summary data
+        let ipdWorkforceData = null; // IPD Workforce breakdown data
+        let opdWorkforceData = null; // OPD Workforce breakdown data
+        let spreadsheetId = null; // Store spreadsheet ID for reuse
+
+        // Helper to escape Regex special characters
+        function escapeRegExp(string) {
+            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+
+        // Helper to fetch GID from Sheet Name
+        async function fetchGidFromName(spreadsheetId, sheetName) {
+            // If already a number, return it
+            if (/^\d+$/.test(sheetName)) return sheetName;
+            
+            try {
+                console.log(`Searching GID for "${sheetName}"...`);
+                // Fetch the public HTML of the spreadsheet
+                const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
+                const response = await fetch(url);
+                const html = await response.text();
+                
+                const safeName = escapeRegExp(sheetName);
+                
+                // Look for the sheet name in the HTML to find its GID
+                // Pattern: "name":"SHEET_NAME" ... "gid":"GID"
+                const regex = new RegExp(`"name":"${safeName}".*?"gid":"(\\d+)"`, 'i');
+                const match = html.match(regex);
+                
+                if (match) {
+                    console.log(`Found GID for ${sheetName}: ${match[1]}`);
+                    return match[1];
+                }
+                
+                // Alternative pattern
+                const regex2 = new RegExp(`gid=(\\d+).*?${safeName}`, 'i');
+                const match2 = html.match(regex2);
+                 if (match2) {
+                    console.log(`Found GID for ${sheetName} (alt): ${match2[1]}`);
+                    return match2[1];
+                }
+
+            } catch (e) {
+                console.warn(`Could not fetch GID for ${sheetName}:`, e);
+            }
+            return null;
+        }
+
+        // Connect to all sheets using single URL
+        async function connectAllSheets() {
+            const mainUrl = document.getElementById('settingMainUrl').value.trim();
+            const summaryInput = document.getElementById('settingSummarySheet').value.trim() || 'Daily_Summary';
+            const ipdInput = document.getElementById('settingIpdSheet').value.trim() || 'IPD_Workforce';
+            const opdInput = document.getElementById('settingOpdSheet').value.trim() || 'OPD_Workforce';
+            const status = document.getElementById('sheetsStatus');
+            
+            if (!mainUrl) {
+                status.className = 'mt-3 px-4 py-2 rounded-lg bg-red-50 text-red-700 text-sm flex items-center gap-2';
+                status.innerHTML = '<i class="fa-solid fa-exclamation-circle"></i> กรุณาใส่ URL ของ Google Sheets';
+                return;
+            }
+
+            toggleLoading(true);
+            
+            status.className = 'mt-3 px-4 py-2 rounded-lg bg-amber-50 text-amber-700 text-sm flex items-center gap-2';
+            status.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังค้นหา GID...';
+
+            // Extract spreadsheet ID
+            let spreadsheetId = null;
+            let baseUrl = '';
+            
+            const pubMatch = mainUrl.match(/\/spreadsheets\/d\/e\/([a-zA-Z0-9-_]+)/);
+            const regularMatch = mainUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+            
+            if (pubMatch) {
+                spreadsheetId = pubMatch[1];
+                baseUrl = `https://docs.google.com/spreadsheets/d/e/${spreadsheetId}/pub?output=csv`;
+            } else if (regularMatch) {
+                spreadsheetId = regularMatch[1];
+                baseUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv`;
+            } else {
+                status.className = 'mt-3 px-4 py-2 rounded-lg bg-red-50 text-red-700 text-sm flex items-center gap-2';
+                status.innerHTML = '<i class="fa-solid fa-times-circle"></i> URL ไม่ถูกต้อง';
+                return;
+            }
+            
+            // Save settings immediately
+            localStorage.setItem('mainSheetUrl', mainUrl);
+            localStorage.setItem('summarySheet', summaryInput);
+            localStorage.setItem('ipdSheet', ipdInput);
+            localStorage.setItem('opdSheet', opdInput);
+
+            // Helper to resolve GID from input (URL, GID, or Name)
+            async function resolveGid(input, spreadsheetId) {
+                if (!input) return null;
+                input = input.trim();
+                
+                // 1. Check if it's a URL with gid
+                const urlMatch = input.match(/gid=(\d+)/);
+                if (urlMatch) {
+                    console.log(`Extracted GID ${urlMatch[1]} from URL`);
+                    return urlMatch[1];
+                }
+                
+                // 2. Check if it's just a number (GID)
+                if (/^\d+$/.test(input)) return input;
+                
+                // 3. Otherwise treat as name and try to fetch
+                return await fetchGidFromName(spreadsheetId, input);
+            }
+
+            // Resolve GIDs
+            let summaryGid = await resolveGid(summaryInput, spreadsheetId) || (summaryInput === 'Daily_Summary' ? '0' : summaryInput);
+            let ipdGid = await resolveGid(ipdInput, spreadsheetId) || ipdInput;
+            let opdGid = await resolveGid(opdInput, spreadsheetId) || opdInput;
+            
+            console.log(`Resolved GIDs - Summary: ${summaryGid}, IPD: ${ipdGid}, OPD: ${opdGid}`);
+            
+            // Validate GIDs (must be numeric)
+            const invalidGids = [];
+            if (isNaN(summaryGid)) invalidGids.push(`Daily Summary`);
+            if (isNaN(ipdGid)) invalidGids.push(`IPD Workforce`);
+            if (isNaN(opdGid)) invalidGids.push(`OPD Workforce`);
+            
+            if (invalidGids.length > 0) {
+                status.className = 'mt-3 px-4 py-2 rounded-lg bg-red-50 text-red-700 text-sm flex items-center gap-2';
+                status.innerHTML = `<div class="flex flex-col gap-1">
+                    <div class="font-bold"><i class="fa-solid fa-exclamation-circle"></i> ไม่พบ GID ของ: ${invalidGids.join(', ')}</div>
+                    <div class="text-xs">วิธีแก้: เปิด Sheet นั้นใน Browser > <b>ก๊อปปี้ URL ทั้งหมดด้านบน</b> > มาวางในช่องนี้ได้เลยครับ</div>
+                </div>`;
+                toggleLoading(false);
+                return;
+            }
+            
+            status.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังโหลดข้อมูล...';
+
+            let summaryCount = 0, ipdCount = 0, opdCount = 0;
+
+            // try block is already started above
+            try {
+                // Load Daily Summary Sheet
+                if (summaryGid) {
+                    const summaryData = await loadSheetByGid(baseUrl, summaryGid);
+                    if (summaryData) {
+                        sheetsData = summaryData;
+                        summaryCount = sheetsData.length;
+                        console.log('📊 Summary data loaded:', summaryCount, 'rows');
+                    }
+                }
+
+                // Load IPD Workforce Sheet
+                if (ipdGid) {
+                    const ipdData = await loadSheetByGid(baseUrl, ipdGid);
+                    if (ipdData) {
+                        ipdWorkforceData = ipdData;
+                        ipdCount = ipdWorkforceData.length;
+                        console.log('🏥 IPD Workforce loaded:', ipdCount, 'rows');
+                        if (ipdWorkforceData[0]) console.log('📋 IPD sample:', ipdWorkforceData[0]);
+                    }
+                }
+
+                // Load OPD Workforce Sheet
+                if (opdGid) {
+                    const opdData = await loadSheetByGid(baseUrl, opdGid);
+                    if (opdData) {
+                        opdWorkforceData = opdData;
+                        opdCount = opdWorkforceData.length;
+                        console.log('🚶 OPD Workforce loaded:', opdCount, 'rows');
+                        if (opdWorkforceData[0]) console.log('📋 OPD sample:', opdWorkforceData[0]);
+                    }
+                }
+
+                status.className = 'mt-3 px-4 py-2 rounded-lg bg-green-50 text-green-700 text-sm flex items-center gap-2';
+                status.innerHTML = `<i class="fa-solid fa-check-circle"></i> สำเร็จ! Summary: ${summaryCount}, IPD: ${ipdCount}, OPD: ${opdCount}`;
+                
+                // Reload data
+                fetchData();
+                toggleLoading(false);
+            } catch (err) {
+                console.error(err);
+                status.className = 'mt-3 px-4 py-2 rounded-lg bg-red-50 text-red-700 text-sm flex items-center gap-2';
+                status.innerHTML = `<i class="fa-solid fa-times-circle"></i> Error: ${err.message}`;
+                toggleLoading(false);
+            }
+        }
+
+        // Load a sheet by gid
+        async function loadSheetByGid(baseUrl, gid) {
+            // Append gid to base URL
+            let url = baseUrl;
+            if (baseUrl.includes('?')) {
+                url = `${baseUrl}&gid=${gid}`;
+            } else {
+                url = `${baseUrl}?gid=${gid}`;
+            }
+            
+            console.log(`Loading sheet gid=${gid}`);
+            console.log(`URL: ${url}`);
+            
+            try {
+                const response = await fetch(url);
+                console.log(`Response status: ${response.status}`);
+                if (response.ok) {
+                    const csvData = await response.text();
+                    console.log(`Received ${csvData.length} characters`);
+                    return parseCSV(csvData);
+                } else {
+                    console.error(`HTTP Error: ${response.status} ${response.statusText}`);
+                }
+            } catch (e) {
+                console.error(`Failed to load sheet gid=${gid}:`, e.message);
+                console.error('This may be a CORS error. Make sure the sheet is published.');
+            }
+            return null;
+        }
+
+        // Legacy function for backward compatibility
+        async function connectSheets() {
+            await connectAllSheets();
+        }
+
+        // Convert Google Sheets URL to CSV export URL
+        function convertToCSVUrl(url) {
+            const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+            if (match) {
+                // Check if gid is specified
+                const gidMatch = url.match(/gid=(\d+)/);
+                const gid = gidMatch ? gidMatch[1] : '0';
+                return `https://docs.google.com/spreadsheets/d/${match[1]}/export?format=csv&gid=${gid}`;
+            }
+            return url;
+        }
+
+        // Parse CSV to JSON
+        function parseCSV(csvText) {
+            const lines = csvText.split('\n').filter(line => line.trim());
+            if (lines.length < 2) return [];
+            
+            // Parse and normalize headers
+            const rawHeaders = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+            console.log('📋 Raw Headers from Google Sheets:', rawHeaders);
+            
+            // Normalize header names to expected format
+            const headers = rawHeaders.map(h => normalizeHeaderName(h));
+            console.log('📋 Normalized Headers:', headers);
+            
+            const data = [];
+            
+            for (let i = 1; i < lines.length; i++) {
+                const values = parseCSVLine(lines[i]);
+                const row = {};
+                headers.forEach((header, idx) => {
+                    let value = values[idx] ? values[idx].trim().replace(/"/g, '') : '';
+                    // Convert to number if possible
+                    if (!isNaN(value) && value !== '') {
+                        value = parseFloat(value);
+                    }
+                    row[header] = value;
+                });
+                data.push(row);
+            }
+            
+            console.log('📋 First row sample:', data[0]);
+            return data;
+        }
+
+        // Normalize header names to expected format
+        function normalizeHeaderName(header) {
+            const h = header.toLowerCase().trim();
+            
+            // Date column
+            if (h === 'date' || h === 'วันที่' || h === 'วัน') return 'date';
+            
+            // Department type
+            if (h === 'dept_type' || h === 'department' || h === 'dept' || h === 'type' || h === 'ประเภท' || h === 'แผนก') return 'dept_type';
+            
+            // Productivity
+            if (h === 'productivity' || h === 'prod' || h === 'ผลิตภาพ') return 'productivity';
+            
+            // CMI
+            if (h === 'cmi' || h === 'case_mix' || h === 'casemix') return 'cmi';
+            
+            // Patient Visit
+            if (h === 'patient_visit' || h === 'patientvisit' || h === 'visits' || h === 'visit' || h === 'ผู้ป่วย') return 'patient_visit';
+            
+            // Workforce
+            if (h === 'total_workforce' || h === 'workforce' || h === 'total' || h === 'กำลังคน') return 'total_workforce';
+            
+            // RN count
+            if (h === 'rn_count' || h === 'rn' || h === 'พยาบาล') return 'rn_count';
+            
+            // PN count  
+            if (h === 'pn_count' || h === 'pn' || h === 'non_rn' || h === 'nonrn' || h === 'na' || h === 'ผู้ช่วย') return 'pn_count';
+            
+            // Ward/Unit name
+            if (h === 'ward_name' || h === 'ward' || h === 'unit_name' || h === 'unit' || h === 'หอผู้ป่วย' || h === 'หน่วยงาน') return 'ward_name';
+            
+            // Shift
+            if (h === 'shift' || h === 'เวร') return 'shift';
+            
+            // CAP status
+            if (h === 'cap_status' || h === 'cap' || h === 'status' || h === 'สถานะ') return 'cap_status';
+            
+            // Skill mix
+            if (h === 'skill_mix_total' || h === 'skillmix' || h === 'ทักษะผสม') return 'skill_mix_total';
+            if (h === 'skill_mix_on_duty' || h === 'onduty' || h === 'เวรดึก') return 'skill_mix_on_duty';
+            if (h === 'skill_mix_ratio' || h === 'ratio' || h === 'อัตราส่วน') return 'skill_mix_ratio';
+            
+            return h;
+        }
+
+        function parseCSVLine(line) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current);
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            result.push(current);
+            return result;
+        }
+
+        // Normalize date to YYYY-MM-DD format
+        function normalizeDate(dateStr) {
+            if (!dateStr) return '';
+            
+            dateStr = String(dateStr).trim();
+            
+            // Already in YYYY-MM-DD format
+            if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+                return dateStr.substring(0, 10);
+            }
+            
+            // Handle M/D/YYYY or MM/DD/YYYY format (US format from Google Sheets)
+            // Example: 1/28/2026 => month=1, day=28, year=2026
+            if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateStr)) {
+                const parts = dateStr.split('/');
+                const first = parseInt(parts[0]);
+                const second = parseInt(parts[1]);
+                const year = parts[2];
+                
+                let month, day;
+                
+                // If second number > 12, it must be the day (US format M/D/YYYY)
+                // If first number > 12, it must be the day (Thai format D/M/YYYY)
+                if (second > 12) {
+                    // US format: M/D/YYYY
+                    month = String(first).padStart(2, '0');
+                    day = String(second).padStart(2, '0');
+                } else if (first > 12) {
+                    // Thai format: D/M/YYYY
+                    day = String(first).padStart(2, '0');
+                    month = String(second).padStart(2, '0');
+                } else {
+                    // Ambiguous - assume US format (M/D/YYYY) as Google Sheets default
+                    month = String(first).padStart(2, '0');
+                    day = String(second).padStart(2, '0');
+                }
+                
+                const result = `${year}-${month}-${day}`;
+                console.log(`Normalized date: ${dateStr} => ${result}`);
+                return result;
+            }
+            
+            // DD-MM-YYYY format
+            if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(dateStr)) {
+                const parts = dateStr.split('-');
+                const day = parts[0].padStart(2, '0');
+                const month = parts[1].padStart(2, '0');
+                const year = parts[2];
+                return `${year}-${month}-${day}`;
+            }
+
+            // Try to parse as Date object
+            try {
+                const date = new Date(dateStr);
+                if (!isNaN(date.getTime())) {
+                    return date.toISOString().substring(0, 10);
+                }
+            } catch (e) {}
+            
+            // Return as-is if no match
+            console.log(`Could not normalize date: ${dateStr}`);
+            return dateStr;
+        }
+
+        // Get data from Sheets or Mock
+        function getDataFromSheets(dept, selectedDate) {
+            // Check if we have any sheets data
+            const hasSummary = sheetsData && sheetsData.length > 0;
+            
+            // Select appropriate workforce data based on department
+            const workforceSource = dept === 'IPD' ? ipdWorkforceData : opdWorkforceData;
+            const hasWorkforce = workforceSource && workforceSource.length > 0;
+            
+            if (!hasSummary && !hasWorkforce) {
+                console.log('No sheets data available');
+                return null;
+            }
+
+            console.log('Selected date:', selectedDate);
+            console.log('Department:', dept);
+            console.log('Summary data rows:', sheetsData ? sheetsData.length : 0);
+            console.log('Workforce source:', dept === 'IPD' ? 'IPD_Workforce' : 'OPD_Workforce');
+            console.log('Workforce data rows:', workforceSource ? workforceSource.length : 0);
+            
+            // Filter Summary data by date and department
+            let filteredSummary = [];
+            if (hasSummary) {
+                filteredSummary = sheetsData.filter(row => {
+                    let rowDate = row.date ? normalizeDate(String(row.date)) : '';
+                    const rowDept = row.dept_type ? String(row.dept_type).toUpperCase().trim() : '';
+                    const dateMatch = !selectedDate || rowDate === selectedDate;
+                    const deptMatch = rowDept === dept.toUpperCase() || rowDept === '';
+                    return dateMatch && deptMatch;
+                });
+                console.log('Filtered summary:', filteredSummary.length, 'rows');
+            }
+
+            // Filter Workforce data by date
+            let filteredWorkforce = [];
+            if (hasWorkforce) {
+                filteredWorkforce = workforceSource.filter(row => {
+                    let rowDate = row.date ? normalizeDate(String(row.date)) : '';
+                    const dateMatch = !selectedDate || rowDate === selectedDate;
+                    return dateMatch;
+                });
+                console.log('Filtered workforce for date', selectedDate, ':', filteredWorkforce.length, 'rows');
+            }
+
+            // If no data found
+            if (filteredSummary.length === 0 && filteredWorkforce.length === 0) {
+                console.log('No matching data found, using mock data');
+                return null;
+            }
+
+            // Aggregate data
+            const firstRow = filteredSummary.length > 0 ? filteredSummary[0] : {};
+            
+            // Calculate totals
+            let totalRN = 0, totalPN = 0;
+            let morningRN = 0, morningPN = 0;
+            let afternoonRN = 0, afternoonPN = 0;
+            let midnightRN = 0, midnightPN = 0;
+            let wardData = [];
+            let capSuitable = 0, capImprove = 0, capShortage = 0;
+
+            // Process Workforce Data (for RN/PN/Shift)
+            if (filteredWorkforce.length > 0) {
+                filteredWorkforce.forEach(row => {
+                    const rn = parseInt(row.rn_count) || parseInt(row.rn) || 0;
+                    const pn = parseInt(row.pn_count) || parseInt(row.pn) || parseInt(row.non_rn) || 0;
+                    const shift = row.shift ? row.shift.toLowerCase() : '';
+                    const wardName = row.ward_name || row.ward || row.unit_name || '';
+                    const prod = parseFloat(row.productivity) || 0;
+                    const cap = row.cap_status ? row.cap_status.toLowerCase() : '';
+
+                    totalRN += rn;
+                    totalPN += pn;
+
+                    if (shift === 'morning' || shift === 'เช้า') {
+                        morningRN += rn;
+                        morningPN += pn;
+                    } else if (shift === 'afternoon' || shift === 'บ่าย') {
+                        afternoonRN += rn;
+                        afternoonPN += pn;
+                    } else if (shift === 'midnight' || shift === 'ดึก') {
+                        midnightRN += rn;
+                        midnightPN += pn;
+                    }
+
+                    // Add to ward data if has ward name
+                    if (wardName && prod > 0) {
+                        // Check if already exists
+                        const existing = wardData.find(w => w.name === wardName);
+                        if (!existing) {
+                            wardData.push({ name: wardName, prod: prod });
+                        }
+                    }
+
+                    // Count CAP status
+                    if (cap === 'suitable' || cap === 'เหมาะสม') capSuitable++;
+                    else if (cap === 'improve' || cap === 'ปรับปรุง') capImprove++;
+                    else if (cap === 'shortage' || cap === 'ขาดแคลน') capShortage++;
+                });
+            } else if (filteredSummary.length > 0) {
+                // Fallback to Summary data if no workforce data
+                filteredSummary.forEach(row => {
+                     // Try to get totals directly if available
+                     totalRN += parseInt(row.total_rn) || 0;
+                     totalPN += parseInt(row.total_pn) || 0;
+                });
+            }
+
+            // Build result object
+            const result = {
+                deptType: dept,
+                productivity: parseFloat(firstRow.productivity) || 0,
+                totalWorkforce: totalRN + totalPN || firstRow.total_workforce || 0,
+                skillMix: {
+                    total: firstRow.skill_mix_total || totalRN + totalPN,
+                    onDuty: firstRow.skill_mix_on_duty || 0,
+                    ratio: firstRow.skill_mix_ratio || '1:6'
+                },
+                capStatus: {
+                    suitable: capSuitable || 0,
+                    improve: capImprove || 0,
+                    shortage: capShortage || 0
+                },
+                wardData: wardData.length > 0 ? wardData : []
+            };
+
+            if (dept === 'IPD') {
+                result.cmi = firstRow.cmi || 0;
+                result.shifts = {
+                    morning: { rn: morningRN || 0, nonRn: morningPN || 0 },
+                    afternoon: { rn: afternoonRN || 0, nonRn: afternoonPN || 0 },
+                    midnight: { rn: midnightRN || 0, nonRn: midnightPN || 0 }
+                };
+            } else {
+                result.patientVisit = firstRow.patient_visit || 0;
+                result.workforce = { rn: totalRN || 0, nonRn: totalPN || 0 };
+            }
+
+            return result;
+        }
+
+        // Modified fetchData to use sheets data
+        function fetchData() {
+            const dept = document.getElementById('deptSelector').value;
+            const ward = document.getElementById('wardSelector').value;
+            const selectedDate = document.getElementById('dateSelector').value;
+            
+            console.log('=== fetchData called ===');
+            console.log('Department:', dept);
+            console.log('Selected Date:', selectedDate);
+            console.log('Sheets Data Available:', sheetsData ? sheetsData.length + ' rows' : 'None');
+            
+            // Try to get data from sheets first
+            const sheetsResult = getDataFromSheets(dept, selectedDate);
+            
+            console.log('Sheets Result:', sheetsResult);
+            
+            if (sheetsResult && (sheetsResult.totalWorkforce > 0 || sheetsResult.productivity > 0)) {
+                console.log('✅ Using sheets data');
+                updateUI(sheetsResult);
+            } else {
+                console.log('⚠️ No matching sheets data, using mock data');
+                // Fall back to mock data
+                updateUI(getMockData(dept, ward));
+            }
+        }
+
+        // Load URLs from localStorage
+        function initializeSheets() {
+            // Load saved URLs
+            const mainUrl = localStorage.getItem('mainSheetUrl') || '';
+            
+            // Load Names/GIDs
+            let summarySheet = localStorage.getItem('summarySheet') || 'Daily_Summary';
+            let ipdSheet = localStorage.getItem('ipdSheet') || 'IPD_Workforce';
+            let opdSheet = localStorage.getItem('opdSheet') || 'OPD_Workforce';
+            
+            document.getElementById('settingMainUrl').value = mainUrl;
+            document.getElementById('settingSummarySheet').value = summarySheet;
+            document.getElementById('settingIpdSheet').value = ipdSheet;
+            document.getElementById('settingOpdSheet').value = opdSheet;
+            
+            // Auto-connect if any URL is saved
+            if (mainUrl) {
+                console.log('📌 Loading saved settings from localStorage');
+                setTimeout(() => connectAllSheets(), 500);
+            }
+        }
+
+
+
+
+        // Load a sheet by gid
+        async function loadSheetByGid(baseUrl, gid) {
+            // Append gid to base URL
+            let url = baseUrl;
+            if (baseUrl.includes('?')) {
+                url = `${baseUrl}&gid=${gid}`;
+            } else {
+                url = `${baseUrl}?gid=${gid}`;
+            }
+            
+            console.log(`Loading sheet gid=${gid}`);
+            console.log(`URL: ${url}`);
+            
+            try {
+                const response = await fetch(url);
+                console.log(`Response status: ${response.status}`);
+                if (response.ok) {
+                    const csvData = await response.text();
+                    console.log(`Received ${csvData.length} characters`);
+                    return parseCSV(csvData);
+                } else {
+                    console.error(`HTTP Error: ${response.status} ${response.statusText}`);
+                }
+            } catch (e) {
+                console.error(`Failed to load sheet gid=${gid}:`, e.message);
+                console.error('This may be a CORS error. Make sure the sheet is published.');
+            }
+            return null;
+        }
+
+        // Legacy function for backward compatibility
+        async function connectSheets() {
+            await connectAllSheets();
+        }
+
+        // Convert Google Sheets URL to CSV export URL
+        function convertToCSVUrl(url) {
+            const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+            if (match) {
+                // Check if gid is specified
+                const gidMatch = url.match(/gid=(\d+)/);
+                const gid = gidMatch ? gidMatch[1] : '0';
+                return `https://docs.google.com/spreadsheets/d/${match[1]}/export?format=csv&gid=${gid}`;
+            }
+            return url;
+        }
+
+        // Parse CSV to JSON
+        function parseCSV(csvText) {
+            const lines = csvText.split('\n').filter(line => line.trim());
+            if (lines.length < 2) return [];
+            
+            // Parse and normalize headers
+            const rawHeaders = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+            console.log('📋 Raw Headers from Google Sheets:', rawHeaders);
+            
+            // Normalize header names to expected format
+            const headers = rawHeaders.map(h => normalizeHeaderName(h));
+            console.log('📋 Normalized Headers:', headers);
+            
+            const data = [];
+            
+            for (let i = 1; i < lines.length; i++) {
+                const values = parseCSVLine(lines[i]);
+                const row = {};
+                headers.forEach((header, idx) => {
+                    let value = values[idx] ? values[idx].trim().replace(/"/g, '') : '';
+                    // Convert to number if possible
+                    if (!isNaN(value) && value !== '') {
+                        value = parseFloat(value);
+                    }
+                    row[header] = value;
+                });
+                data.push(row);
+            }
+            
+            console.log('📋 First row sample:', data[0]);
+            return data;
+        }
+
+        // Normalize header names to expected format
+        function normalizeHeaderName(header) {
+            const h = header.toLowerCase().trim();
+            
+            // Date column
+            if (h === 'date' || h === 'วันที่' || h === 'วัน') return 'date';
+            
+            // Department type
+            if (h === 'dept_type' || h === 'department' || h === 'dept' || h === 'type' || h === 'ประเภท' || h === 'แผนก') return 'dept_type';
+            
+            // Productivity
+            if (h === 'productivity' || h === 'prod' || h === 'ผลิตภาพ') return 'productivity';
+            
+            // CMI
+            if (h === 'cmi' || h === 'case_mix' || h === 'casemix') return 'cmi';
+            
+            // Patient Visit
+            if (h === 'patient_visit' || h === 'patientvisit' || h === 'visits' || h === 'visit' || h === 'ผู้ป่วย') return 'patient_visit';
+            
+            // Workforce
+            if (h === 'total_workforce' || h === 'workforce' || h === 'total' || h === 'กำลังคน') return 'total_workforce';
+            
+            // RN count
+            if (h === 'rn_count' || h === 'rn' || h === 'พยาบาล') return 'rn_count';
+            
+            // PN count  
+            if (h === 'pn_count' || h === 'pn' || h === 'non_rn' || h === 'nonrn' || h === 'na' || h === 'ผู้ช่วย') return 'pn_count';
+            
+            // Ward/Unit name
+            if (h === 'ward_name' || h === 'ward' || h === 'unit_name' || h === 'unit' || h === 'หอผู้ป่วย' || h === 'หน่วยงาน') return 'ward_name';
+            
+            // Shift
+            if (h === 'shift' || h === 'เวร') return 'shift';
+            
+            // CAP status
+            if (h === 'cap_status' || h === 'cap' || h === 'status' || h === 'สถานะ') return 'cap_status';
+            
+            // Skill mix
+            if (h === 'skill_mix_total' || h === 'skillmix' || h === 'ทักษะผสม') return 'skill_mix_total';
+            if (h === 'skill_mix_on_duty' || h === 'onduty' || h === 'เวรดึก') return 'skill_mix_on_duty';
+            if (h === 'skill_mix_ratio' || h === 'ratio' || h === 'อัตราส่วน') return 'skill_mix_ratio';
+            
+            return h;
+        }
+
+        function parseCSVLine(line) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current);
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            result.push(current);
+            return result;
+        }
+
+        // Normalize date to YYYY-MM-DD format
+        function normalizeDate(dateStr) {
+            if (!dateStr) return '';
+            
+            dateStr = String(dateStr).trim();
+            
+            // Already in YYYY-MM-DD format
+            if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+                return dateStr.substring(0, 10);
+            }
+            
+            // Handle M/D/YYYY or MM/DD/YYYY format (US format from Google Sheets)
+            // Example: 1/28/2026 => month=1, day=28, year=2026
+            if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateStr)) {
+                const parts = dateStr.split('/');
+                const first = parseInt(parts[0]);
+                const second = parseInt(parts[1]);
+                const year = parts[2];
+                
+                let month, day;
+                
+                // If second number > 12, it must be the day (US format M/D/YYYY)
+                // If first number > 12, it must be the day (Thai format D/M/YYYY)
+                if (second > 12) {
+                    // US format: M/D/YYYY
+                    month = String(first).padStart(2, '0');
+                    day = String(second).padStart(2, '0');
+                } else if (first > 12) {
+                    // Thai format: D/M/YYYY
+                    day = String(first).padStart(2, '0');
+                    month = String(second).padStart(2, '0');
+                } else {
+                    // Ambiguous - assume US format (M/D/YYYY) as Google Sheets default
+                    month = String(first).padStart(2, '0');
+                    day = String(second).padStart(2, '0');
+                }
+                
+                const result = `${year}-${month}-${day}`;
+                console.log(`Normalized date: ${dateStr} => ${result}`);
+                return result;
+            }
+
+            // DD-MM-YYYY format
+            if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(dateStr)) {
+                const parts = dateStr.split('-');
+                const day = parts[0].padStart(2, '0');
+                const month = parts[1].padStart(2, '0');
+                const year = parts[2];
+                return `${year}-${month}-${day}`;
+            }
+
+            // Try to parse as Date object
+            try {
+                const date = new Date(dateStr);
+                if (!isNaN(date.getTime())) {
+                    return date.toISOString().substring(0, 10);
+                }
+            } catch (e) {}
+            
+            // Return as-is if no match
+            console.log(`Could not normalize date: ${dateStr}`);
+            return dateStr;
+        }
+
+        // Get data from Sheets or Mock
+        function getDataFromSheets(dept, selectedDate) {
+            // Check if we have any sheets data
+            const hasSummary = sheetsData && sheetsData.length > 0;
+            
+            // Select appropriate workforce data based on department
+            const workforceSource = dept === 'IPD' ? ipdWorkforceData : opdWorkforceData;
+            const hasWorkforce = workforceSource && workforceSource.length > 0;
+            
+            if (!hasSummary && !hasWorkforce) {
+                console.log('No sheets data available');
+                return null;
+            }
+
+            console.log('Selected date:', selectedDate);
+            console.log('Department:', dept);
+            console.log('Summary data rows:', sheetsData ? sheetsData.length : 0);
+            console.log('Workforce source:', dept === 'IPD' ? 'IPD_Workforce' : 'OPD_Workforce');
+            console.log('Workforce data rows:', workforceSource ? workforceSource.length : 0);
+            
+            // Filter Summary data by date and department
+            let filteredSummary = [];
+            if (hasSummary) {
+                filteredSummary = sheetsData.filter(row => {
+                    let rowDate = row.date ? normalizeDate(String(row.date)) : '';
+                    const rowDept = row.dept_type ? String(row.dept_type).toUpperCase().trim() : '';
+                    const dateMatch = !selectedDate || rowDate === selectedDate;
+                    const deptMatch = rowDept === dept.toUpperCase() || rowDept === '';
+                    return dateMatch && deptMatch;
+                });
+                console.log('Filtered summary:', filteredSummary.length, 'rows');
+            }
+
+            // Filter Workforce data by date
+            let filteredWorkforce = [];
+            if (hasWorkforce) {
+                filteredWorkforce = workforceSource.filter(row => {
+                    let rowDate = row.date ? normalizeDate(String(row.date)) : '';
+                    const dateMatch = !selectedDate || rowDate === selectedDate;
+                    return dateMatch;
+                });
+                console.log('Filtered workforce for date', selectedDate, ':', filteredWorkforce.length, 'rows');
+            }
+
+            // If no data found
+            if (filteredSummary.length === 0 && filteredWorkforce.length === 0) {
+                console.log('No matching data found, using mock data');
+                return null;
+            }
+
+            // Aggregate data
+            const firstRow = filteredSummary.length > 0 ? filteredSummary[0] : {};
+            
+            // Calculate totals
+            let totalRN = 0, totalPN = 0;
+            let morningRN = 0, morningPN = 0;
+            let afternoonRN = 0, afternoonPN = 0;
+            let midnightRN = 0, midnightPN = 0;
+            let wardData = [];
+            let capSuitable = 0, capImprove = 0, capShortage = 0;
+
+            // Process Workforce Data (for RN/PN/Shift)
+            if (filteredWorkforce.length > 0) {
+                filteredWorkforce.forEach(row => {
+                    const rn = parseInt(row.rn_count) || parseInt(row.rn) || 0;
+                    const pn = parseInt(row.pn_count) || parseInt(row.pn) || parseInt(row.non_rn) || 0;
+                    const shift = row.shift ? row.shift.toLowerCase() : '';
+                    const wardName = row.ward_name || row.ward || row.unit_name || '';
+                    const prod = parseFloat(row.productivity) || 0;
+                    const cap = row.cap_status ? row.cap_status.toLowerCase() : '';
+
+                    totalRN += rn;
+                    totalPN += pn;
+
+                    if (shift === 'morning' || shift === 'เช้า') {
+                        morningRN += rn;
+                        morningPN += pn;
+                    } else if (shift === 'afternoon' || shift === 'บ่าย') {
+                        afternoonRN += rn;
+                        afternoonPN += pn;
+                    } else if (shift === 'midnight' || shift === 'ดึก') {
+                        midnightRN += rn;
+                        midnightPN += pn;
+                    }
+
+                    // Add to ward data if has ward name
+                    if (wardName && prod > 0) {
+                        // Check if already exists
+                        const existing = wardData.find(w => w.name === wardName);
+                        if (!existing) {
+                            wardData.push({ name: wardName, prod: prod });
+                        }
+                    }
+
+                    // Count CAP status
+                    if (cap === 'suitable' || cap === 'เหมาะสม') capSuitable++;
+                    else if (cap === 'improve' || cap === 'ปรับปรุง') capImprove++;
+                    else if (cap === 'shortage' || cap === 'ขาดแคลน') capShortage++;
+                });
+            } else if (filteredSummary.length > 0) {
+                // Fallback to Summary data if no workforce data
+                filteredSummary.forEach(row => {
+                     // Try to get totals directly if available
+                     totalRN += parseInt(row.total_rn) || 0;
+                     totalPN += parseInt(row.total_pn) || 0;
+                });
+            }
+
+            // Build result object
+            const result = {
+                deptType: dept,
+                productivity: parseFloat(firstRow.productivity) || 0,
+                totalWorkforce: totalRN + totalPN || firstRow.total_workforce || 0,
+                skillMix: {
+                    total: firstRow.skill_mix_total || totalRN + totalPN,
+                    onDuty: firstRow.skill_mix_on_duty || 0,
+                    ratio: firstRow.skill_mix_ratio || '1:6'
+                },
+                capStatus: {
+                    suitable: capSuitable || 0,
+                    improve: capImprove || 0,
+                    shortage: capShortage || 0
+                },
+                wardData: wardData.length > 0 ? wardData : []
+            };
+
+            if (dept === 'IPD') {
+                result.cmi = firstRow.cmi || 0;
+                result.shifts = {
+                    morning: { rn: morningRN || 0, nonRn: morningPN || 0 },
+                    afternoon: { rn: afternoonRN || 0, nonRn: afternoonPN || 0 },
+                    midnight: { rn: midnightRN || 0, nonRn: midnightPN || 0 }
+                };
+            } else {
+                result.patientVisit = firstRow.patient_visit || 0;
+                result.workforce = { rn: totalRN || 0, nonRn: totalPN || 0 };
+            }
+
+            return result;
+        }
+
+        // Modified fetchData to use sheets data
+        function fetchData() {
+            const dept = document.getElementById('deptSelector').value;
+            const ward = document.getElementById('wardSelector').value;
+            const selectedDate = document.getElementById('dateSelector').value;
+            
+            console.log('=== fetchData called ===');
+            console.log('Department:', dept);
+            console.log('Selected Date:', selectedDate);
+            console.log('Sheets Data Available:', sheetsData ? sheetsData.length + ' rows' : 'None');
+            
+            // Try to get data from sheets first
+            const sheetsResult = getDataFromSheets(dept, selectedDate);
+            
+            console.log('Sheets Result:', sheetsResult);
+            
+            if (sheetsResult && (sheetsResult.totalWorkforce > 0 || sheetsResult.productivity > 0)) {
+                console.log('✅ Using sheets data');
+                updateUI(sheetsResult);
+            } else {
+                console.log('⚠️ No matching sheets data');
+                // Show empty state (zeros) instead of mock data
+                updateUI({
+                    deptType: dept,
+                    productivity: 0,
+                    totalWorkforce: 0,
+                    skillMix: { total: 0, onDuty: 0, ratio: '-' },
+                    capStatus: { suitable: 0, improve: 0, shortage: 0 },
+                    wardData: [],
+                    cmi: 0,
+                    patientVisit: 0,
+                    shifts: {
+                        morning: { rn: 0, nonRn: 0 },
+                        afternoon: { rn: 0, nonRn: 0 },
+                        midnight: { rn: 0, nonRn: 0 }
+                    },
+                    workforce: { rn: 0, nonRn: 0 }
+                });
+            }
+        }
+
+        // Load URLs from localStorage
+
+        
+        // Initialize on page load
+        initializeSheets();
+    </script>
+</body>
+</html>

@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nursing Organization Dashboard</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body { font-family: 'Sarabun', sans-serif; background-color: #e5e7eb; }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .card-kpi {
+            background: linear-gradient(135deg, #ffffff 0%, #f3f4f6 100%);
+            border-radius: 16px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            border: 1px solid #e5e7eb;
+        }
+        .shift-card {
+            transition: all 0.2s;
+        }
+        .shift-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="p-4 md:p-6 min-h-screen">
+
+    <!-- Header Section -->
+    <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+        <div class="flex items-center gap-3">
+            <div class="bg-indigo-100 p-3 rounded-xl shadow-sm text-indigo-600">
+                <i class="fa-solid fa-hospital text-xl"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold text-gray-700">Nursing Organization</h1>
+                <p class="text-xs text-gray-500">Real-time Workforce Monitoring</p>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="glass-panel p-2 flex flex-wrap items-center gap-2">
+            
+            <!-- 1. Department Type Selector -->
+            <div class="flex items-center bg-white rounded-lg px-3 py-1.5 border border-indigo-200">
+                <i class="fa-solid fa-layer-group text-indigo-500 text-xs mr-2"></i>
+                <label class="text-xs text-gray-500 mr-2 font-bold">ประเภท:</label>
+                <select id="deptSelector" onchange="updateWardOptions()" class="text-sm font-bold text-indigo-700 bg-transparent outline-none cursor-pointer">
+                    <option value="IPD">ผู้ป่วยใน (IPD)</option>
+                    <option value="OPD">ผู้ป่วยนอก (OPD)</option>
+                </select>
+            </div>
+
+            <div class="w-px h-6 bg-gray-300 mx-1 hidden md:block"></div>
+
+            <!-- 2. Ward Selector -->
+            <div class="flex items-center bg-white rounded-lg px-3 py-1.5 border border-gray-200">
+                <i class="fa-solid fa-hospital-user text-gray-400 text-xs mr-2"></i>
+                <label class="text-xs text-gray-500 mr-2">หน่วยงาน:</label>
+                <select id="wardSelector" onchange="fetchData()" class="text-sm font-semibold text-gray-700 bg-transparent outline-none cursor-pointer min-w-[150px]">
+                    <!-- Populated by JS -->
+                </select>
+            </div>
+            
+            <div class="w-px h-6 bg-gray-300 mx-1 hidden md:block"></div>
+
+            <!-- 3. Date Selector -->
+            <div class="flex items-center bg-white rounded-lg px-3 py-1.5 border border-gray-200">
+                <i class="fa-regular fa-calendar text-gray-400 text-xs mr-2"></i>
+                <label class="text-xs text-gray-500 mr-2">วันที่:</label>
+                <input type="date" id="dateSelector" onchange="fetchData()" class="text-sm font-semibold text-gray-700 bg-transparent outline-none cursor-pointer">
+            </div>
+
+            <button onclick="fetchData()" class="bg-blue-600 hover:bg-blue-700 text-white w-9 h-9 rounded-lg shadow-md transition-colors flex items-center justify-center ml-auto md:ml-0">
+                <i class="fa-solid fa-arrows-rotate"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- Left Column: KPIs & Workforce -->
+        <div class="lg:col-span-5 flex flex-col gap-6">
+            
+            <!-- Productivity & CMI Row (Daily Summary) -->
+            <div class="grid grid-cols-2 gap-4">
+                <!-- Productivity -->
+                <div class="card-kpi p-5 text-center relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-full h-1 bg-blue-500"></div>
+                    <h3 class="text-gray-500 text-xs font-semibold uppercase tracking-wider mb-2">Daily Productivity</h3>
+                    <div class="text-4xl font-bold text-blue-600 mb-1" id="prodValue">--%</div>
+                    <div class="text-xs text-gray-400">Target: 85-90%</div>
+                </div>
+                
+                <!-- CMI -->
+                <div class="card-kpi p-5 text-center relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-full h-1 bg-purple-500"></div>
+                    <h3 class="text-gray-500 text-xs font-semibold uppercase tracking-wider mb-2">CMI (Case Mix)</h3>
+                    <div class="text-4xl font-bold text-purple-600 mb-1" id="cmiValue">--</div>
+                    <div class="text-xs text-gray-400">ความรุนแรงโรคเฉลี่ย</div>
+                </div>
+            </div>
+
+            <!-- Workforce Status Header -->
+            <div class="flex items-center justify-between mt-2">
+                <div class="flex items-center gap-2">
+                    <div class="w-1 h-5 bg-pink-500 rounded-full"></div>
+                    <h2 class="font-bold text-gray-700">Workforce Status <span id="deptLabel" class="text-xs font-normal text-gray-400 ml-1"></span></h2>
+                </div>
+            </div>
+
+            <!-- DYNAMIC WORKFORCE SECTION -->
+            
+            <!-- 1. IPD VIEW: Shift Breakdown Table -->
+            <div id="ipdWorkforcePanel" class="hidden flex-col gap-4">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-gray-50 text-gray-500 font-medium">
+                            <tr>
+                                <th class="px-4 py-3">เวร (Shift)</th>
+                                <th class="px-4 py-3 text-center text-pink-600"><i class="fa-solid fa-user-nurse mr-1"></i>RN</th>
+                                <th class="px-4 py-3 text-center text-yellow-600"><i class="fa-solid fa-user-gear mr-1"></i>Non-RN</th>
+                                <th class="px-4 py-3 text-center">รวม</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            <!-- Morning -->
+                            <tr class="hover:bg-pink-50/50 transition-colors">
+                                <td class="px-4 py-3 font-semibold text-gray-700"><span class="w-2 h-2 rounded-full bg-orange-400 inline-block mr-2"></span>เช้า (Morning)</td>
+                                <td class="px-4 py-3 text-center font-bold text-gray-600" id="shiftM_RN">--</td>
+                                <td class="px-4 py-3 text-center font-bold text-gray-600" id="shiftM_Non">--</td>
+                                <td class="px-4 py-3 text-center font-bold text-gray-800 bg-gray-50" id="shiftM_Total">--</td>
+                            </tr>
+                            <!-- Afternoon -->
+                            <tr class="hover:bg-pink-50/50 transition-colors">
+                                <td class="px-4 py-3 font-semibold text-gray-700"><span class="w-2 h-2 rounded-full bg-blue-400 inline-block mr-2"></span>บ่าย (Afternoon)</td>
+                                <td class="px-4 py-3 text-center font-bold text-gray-600" id="shiftA_RN">--</td>
+                                <td class="px-4 py-3 text-center font-bold text-gray-600" id="shiftA_Non">--</td>
+                                <td class="px-4 py-3 text-center font-bold text-gray-800 bg-gray-50" id="shiftA_Total">--</td>
+                            </tr>
+                            <!-- Midnight -->
+                            <tr class="hover:bg-pink-50/50 transition-colors">
+                                <td class="px-4 py-3 font-semibold text-gray-700"><span class="w-2 h-2 rounded-full bg-indigo-900 inline-block mr-2"></span>ดึก (Midnight)</td>
+                                <td class="px-4 py-3 text-center font-bold text-gray-600" id="shiftN_RN">--</td>
+                                <td class="px-4 py-3 text-center font-bold text-gray-600" id="shiftN_Non">--</td>
+                                <td class="px-4 py-3 text-center font-bold text-gray-800 bg-gray-50" id="shiftN_Total">--</td>
+                            </tr>
+                        </tbody>
+                        <tfoot class="bg-gray-50 font-bold text-gray-700 border-t border-gray-200">
+                            <tr>
+                                <td class="px-4 py-3">รวม 24 ชม.</td>
+                                <td class="px-4 py-3 text-center text-pink-600" id="totalDay_RN">--</td>
+                                <td class="px-4 py-3 text-center text-yellow-600" id="totalDay_Non">--</td>
+                                <td class="px-4 py-3 text-center text-lg" id="totalDay_All">--</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <!-- Staff Mix Ratio (IPD) -->
+                <div class="card-kpi p-4 flex items-center justify-between">
+                     <div class="flex flex-col gap-1">
+                        <div class="text-xs font-bold text-gray-400">Staff Mix Ratio (Daily)</div>
+                        <div class="text-2xl font-bold text-pink-600"><span id="ipdRnRatio">--</span>% RN</div>
+                     </div>
+                     <div class="w-24 h-24 relative">
+                        <canvas id="ipdStaffMixChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. OPD VIEW: Simple Card -->
+            <div id="opdWorkforcePanel" class="hidden grid-cols-1 md:grid-cols-2 gap-4">
+                 <div class="bg-pink-50 border border-pink-100 rounded-2xl p-4 flex flex-col items-center justify-center card-shadow text-center">
+                    <div class="text-pink-800 font-semibold mb-1">พยาบาล (RN)</div>
+                    <div class="text-3xl font-bold text-pink-600" id="opdRn">--</div>
+                    <div class="text-xs text-pink-400 mt-1">คน</div>
+                </div>
+                <div class="bg-yellow-50 border border-yellow-100 rounded-2xl p-4 flex flex-col items-center justify-center card-shadow text-center">
+                    <div class="text-yellow-800 font-semibold mb-1">ผู้ช่วย (Non-RN)</div>
+                    <div class="text-3xl font-bold text-yellow-600" id="opdNon">--</div>
+                    <div class="text-xs text-yellow-400 mt-1">คน</div>
+                </div>
+            </div>
+
+            <!-- Skill Mix Header -->
+            <div class="flex items-center gap-2 mt-2">
+                <div class="w-1 h-5 bg-emerald-500 rounded-full"></div>
+                <h2 class="font-bold text-gray-700">Skill Mix / Competency</h2>
+            </div>
+             <!-- Skill Mix Cards -->
+             <div class="grid grid-cols-2 gap-4">
+                <div class="bg-emerald-100/50 border border-emerald-100 rounded-xl p-4 text-center">
+                    <div class="text-emerald-800 font-bold text-sm">ทักษะผสม (Total)</div>
+                    <div class="text-xl font-bold text-emerald-600 mt-1" id="smTotal">--</div>
+                </div>
+                <div class="bg-emerald-100/50 border border-emerald-100 rounded-xl p-4 text-center">
+                    <div class="text-emerald-800 font-bold text-sm">เวรดึก (On Duty)</div>
+                    <div class="text-xl font-bold text-emerald-600 mt-1" id="smOnDuty">--</div>
+                    <div class="text-xs text-emerald-500 mt-1">Ratio <span id="smRatio">--</span></div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Right Column: Charts -->
+        <div class="lg:col-span-7 flex flex-col gap-6">
+            
+            <!-- Overview Status (Bar Chart) -->
+            <div class="card-kpi p-6">
+                <h3 class="text-gray-700 font-bold mb-4 flex items-center gap-2">
+                    <i class="fa-regular fa-chart-bar text-blue-500"></i>
+                    สถานะอัตรากำลัง (Overview Status)
+                </h3>
+                <div class="h-48 w-full">
+                    <canvas id="statusChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Detailed Ward Chart -->
+            <div class="card-kpi p-6 flex-grow flex flex-col">
+                <div class="flex justify-between items-start mb-6">
+                    <div>
+                        <h3 class="text-gray-700 font-bold flex items-center gap-2">
+                            <i class="fa-solid fa-list-ul text-gray-500"></i>
+                            <span id="chartTitle">รายละเอียดตามหน่วยงาน</span>
+                        </h3>
+                        <p class="text-xs text-gray-400 mt-1">เปรียบเทียบ Productivity vs Capacity</p>
+                    </div>
+                    <div class="flex flex-col gap-1.5 text-xs">
+                        <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-sm bg-indigo-500"></div> <span class="text-gray-500">Over (>110%)</span></div>
+                        <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-sm bg-emerald-400"></div> <span class="text-gray-500">Appropriate</span></div>
+                        <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-sm bg-red-400"></div> <span class="text-gray-500">Under (<90%)</span></div>
+                    </div>
+                </div>
+
+                <div class="relative w-full flex-grow min-h-[350px]">
+                    <canvas id="wardChart"></canvas>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Script -->
+    <script>
+        // --- Configuration ---
+        const wardsIPD = [
+            "18 อายุรกรรม", "17 ผู้ป่วยหนัก", "10 ศัลยกรรม", "6 EENT", "4 ออร์โธปิดิกส์", 
+            "3 กุมาร", "3 สูตินรีเวช", "2 ผู้คลอด", "1 ตรวจรักษาพิเศษ"
+        ];
+        const wardsOPD = [
+            "OPD อายุรกรรม", "OPD ศัลยกรรม", "OPD สูติ-นรีเวช", "OPD เด็ก", "OPD ตา หู คอ จมูก",
+            "ห้องฉุกเฉิน (ER)", "ห้องผ่าตัด (OR)", "ทันตกรรม", "กายภาพบำบัด"
+        ];
+
+        // Global Chart Instances
+        let mixChart = null;
+        let statusChart = null;
+        let wardChart = null;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('dateSelector').valueAsDate = new Date();
+            updateWardOptions(); // Initialize Ward Dropdown
+        });
+
+        function updateWardOptions() {
+            const dept = document.getElementById('deptSelector').value;
+            const wardSelect = document.getElementById('wardSelector');
+            const wardList = dept === 'IPD' ? wardsIPD : wardsOPD;
+
+            wardSelect.innerHTML = '<option value="all">ภาพรวม (All)</option>';
+            wardList.forEach(ward => {
+                const option = document.createElement('option');
+                option.value = ward;
+                option.text = ward;
+                wardSelect.appendChild(option);
+            });
+            
+            // Update Label
+            document.getElementById('deptLabel').innerText = `(${dept})`;
+            
+            // Fetch new data
+            fetchData();
+        }
+
+        function fetchData() {
+            const dept = document.getElementById('deptSelector').value;
+            const ward = document.getElementById('wardSelector').value;
+            const date = document.getElementById('dateSelector').value;
+
+            // In Google Apps Script environment
+            if (typeof google !== 'undefined' && google.script) {
+                google.script.run
+                    .withSuccessHandler(updateUI)
+                    .withFailureHandler(err => {
+                        console.error(err);
+                        updateUI(getMockDataLocal(dept, ward)); 
+                    })
+                    .getDashboardData(date, ward, dept); 
+            } else {
+                // Local testing
+                setTimeout(() => updateUI(getMockDataLocal(dept, ward)), 300);
+            }
+        }
+
+        function updateUI(data) {
+            const dept = data.deptType;
+
+            // 1. Text Metrics (Daily)
+            document.getElementById('prodValue').innerText = data.productivity + "%";
+            document.getElementById('cmiValue').innerText = data.cmi;
+
+            // 2. Workforce Section Logic
+            if (dept === 'IPD') {
+                // Show IPD Panel, Hide OPD
+                document.getElementById('ipdWorkforcePanel').classList.remove('hidden');
+                document.getElementById('ipdWorkforcePanel').classList.add('flex');
+                document.getElementById('opdWorkforcePanel').classList.add('hidden');
+                document.getElementById('opdWorkforcePanel').classList.remove('grid');
+
+                // Fill Shift Table
+                const s = data.shifts;
+                // Morning
+                document.getElementById('shiftM_RN').innerText = s.morning.rn;
+                document.getElementById('shiftM_Non').innerText = s.morning.nonRn;
+                document.getElementById('shiftM_Total').innerText = s.morning.rn + s.morning.nonRn;
+                // Afternoon
+                document.getElementById('shiftA_RN').innerText = s.afternoon.rn;
+                document.getElementById('shiftA_Non').innerText = s.afternoon.nonRn;
+                document.getElementById('shiftA_Total').innerText = s.afternoon.rn + s.afternoon.nonRn;
+                // Midnight
+                document.getElementById('shiftN_RN').innerText = s.midnight.rn;
+                document.getElementById('shiftN_Non').innerText = s.midnight.nonRn;
+                document.getElementById('shiftN_Total').innerText = s.midnight.rn + s.midnight.nonRn;
+                
+                // Total Summary
+                const totalRN = s.morning.rn + s.afternoon.rn + s.midnight.rn;
+                const totalNon = s.morning.nonRn + s.afternoon.nonRn + s.midnight.nonRn;
+                document.getElementById('totalDay_RN').innerText = totalRN;
+                document.getElementById('totalDay_Non').innerText = totalNon;
+                document.getElementById('totalDay_All').innerText = totalRN + totalNon;
+
+                // IPD Staff Mix Chart
+                const totalStaff = totalRN + totalNon;
+                const rnPerc = totalStaff > 0 ? Math.round((totalRN / totalStaff) * 100) : 0;
+                document.getElementById('ipdRnRatio').innerText = rnPerc;
+                renderMixChart('ipdStaffMixChart', rnPerc, 100 - rnPerc);
+
+            } else {
+                // Show OPD Panel, Hide IPD
+                document.getElementById('opdWorkforcePanel').classList.remove('hidden');
+                document.getElementById('opdWorkforcePanel').classList.add('grid');
+                document.getElementById('ipdWorkforcePanel').classList.add('hidden');
+                document.getElementById('ipdWorkforcePanel').classList.remove('flex');
+
+                document.getElementById('opdRn').innerText = data.workforce.rn;
+                document.getElementById('opdNon').innerText = data.workforce.nonRn;
+            }
+            
+            // Skill Mix (Common)
+            document.getElementById('smTotal').innerText = data.skillMix.total;
+            document.getElementById('smOnDuty').innerText = data.skillMix.onDuty;
+            document.getElementById('smRatio').innerText = data.skillMix.ratio;
+
+            // 3. Charts
+            renderStatusChart(data.wardData);
+            renderWardChart(data.wardData, data.deptType);
+        }
+
+        // --- Chart Renderers ---
+
+        function renderMixChart(canvasId, rn, asst) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            if (mixChart) mixChart.destroy();
+
+            mixChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['RN', 'Assistant'],
+                    datasets: [{
+                        data: [rn, asst],
+                        backgroundColor: ['#ec4899', '#facc15'], 
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false, cutout: '70%',
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        function renderStatusChart(wardData) {
+            const ctx = document.getElementById('statusChart').getContext('2d');
+            if (statusChart) statusChart.destroy();
+
+            let over = 0, app = 0, under = 0;
+            wardData.forEach(d => {
+                if (d.status === 'Over') over++;
+                else if (d.status === 'Under') under++;
+                else app++;
+            });
+
+            statusChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['เหมาะสม (Match)', 'น้อยกว่า (Under)', 'มากกว่า (Over)'],
+                    datasets: [{
+                        data: [app, under, over],
+                        backgroundColor: ['#4ade80', '#f87171', '#818cf8'],
+                        barThickness: 40, borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { display: false, beginAtZero: true },
+                        x: { grid: { display: false }, ticks: { font: { family: 'Sarabun' } } }
+                    }
+                }
+            });
+        }
+
+        function renderWardChart(wardData, deptType) {
+            const ctx = document.getElementById('wardChart').getContext('2d');
+            if (wardChart) wardChart.destroy();
+
+            const labels = wardData.map(d => d.name);
+            const dataOver = wardData.map(d => d.status === 'Over' ? d.prod : 0);
+            const dataApp = wardData.map(d => d.status === 'Appropriate' ? d.prod : 0);
+            const dataUnder = wardData.map(d => d.status === 'Under' ? d.prod : 0);
+
+            // Dynamic Chart Title
+            document.getElementById('chartTitle').innerText = deptType === 'IPD' ? 
+                'รายละเอียดตามหอผู้ป่วย (Ward Details)' : 'รายละเอียดตามจุดบริการ (Unit Details)';
+
+            wardChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: 'Over', data: dataOver, backgroundColor: '#6366f1' }, 
+                        { label: 'Match', data: dataApp, backgroundColor: '#4ade80' }, 
+                        { label: 'Under', data: dataUnder, backgroundColor: '#f87171' } 
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { stacked: true, grid: { display: false }, ticks: { font: { family: 'Sarabun' } } },
+                        y: { stacked: true, border: { display: false }, grid: { color: '#f3f4f6' } }
+                    }
+                }
+            });
+        }
+
+        // --- Mock Data Generator (Simulate Logic) ---
+        function getMockDataLocal(dept, ward) {
+            let baseWards = [];
+            let avgProd, avgCmi;
+            let shifts = {}; // For IPD
+            let workforce = {}; // For OPD generic
+
+            if (dept === 'IPD') {
+                baseWards = [
+                    { name: "18 อายุรกรรม", prod: 84, status: "Under" },
+                    { name: "17 ผู้ป่วยหนัก", prod: 95, status: "Appropriate" },
+                    { name: "10 ศัลยกรรม", prod: 115, status: "Over" },
+                    { name: "6 EENT", prod: 65, status: "Under" }
+                ];
+                avgProd = 84.57; avgCmi = 1.45;
+                
+                // Mock Shift Data for IPD
+                shifts = {
+                    morning: { rn: 5, nonRn: 2 },
+                    afternoon: { rn: 4, nonRn: 2 },
+                    midnight: { rn: 3, nonRn: 1 }
+                };
+
+            } else { // OPD
+                baseWards = [
+                    { name: "ER ฉุกเฉิน", prod: 120, status: "Over" },
+                    { name: "OPD อายุรกรรม", prod: 98, status: "Appropriate" },
+                    { name: "ทันตกรรม", prod: 90, status: "Appropriate" }
+                ];
+                avgProd = 99.6; avgCmi = 0.85;
+                
+                workforce = { rn: 12, nonRn: 4 }; // Simple total for OPD
+            }
+
+            // Filter if specific ward selected
+            const finalWards = (ward === 'all') ? baseWards : baseWards.filter(w => w.name === ward);
+            
+            return {
+                deptType: dept,
+                productivity: avgProd, 
+                cmi: avgCmi,
+                workforce: workforce, // Used if OPD
+                shifts: shifts,       // Used if IPD
+                skillMix: {
+                     total: dept === 'IPD' ? 495 : 80,
+                     onDuty: dept === 'IPD' ? 79 : 12,
+                     ratio: "1:7"
+                },
+                wardData: finalWards
+            };
+        }
+    </script>
+</body>
+</html>
