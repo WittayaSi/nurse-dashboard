@@ -38,7 +38,10 @@ export async function GET(request: NextRequest) {
 
 async function getIPDDashboard(date: string, wardId: string | null) {
     // Get shift data
-    const shiftConditions = [eq(ipdDailyShifts.recordDate, date)];
+    const shiftConditions = [
+        eq(ipdDailyShifts.recordDate, date),
+        eq(nursingWards.deptType, 'IPD')
+    ];
     if (wardId) shiftConditions.push(eq(ipdDailyShifts.wardId, parseInt(wardId)));
 
     const shifts = await db.select({
@@ -51,11 +54,14 @@ async function getIPDDashboard(date: string, wardId: string | null) {
         naCount: ipdDailyShifts.naCount,
     })
     .from(ipdDailyShifts)
-    .leftJoin(nursingWards, eq(ipdDailyShifts.wardId, nursingWards.id))
+    .innerJoin(nursingWards, eq(ipdDailyShifts.wardId, nursingWards.id))
     .where(and(...shiftConditions));
 
     // Get summary data
-    const summaryConditions = [eq(ipdDailySummary.recordDate, date)];
+    const summaryConditions = [
+        eq(ipdDailySummary.recordDate, date),
+        eq(nursingWards.deptType, 'IPD')
+    ];
     if (wardId) summaryConditions.push(eq(ipdDailySummary.wardId, parseInt(wardId)));
 
     const summaries = await db.select({
@@ -71,12 +77,12 @@ async function getIPDDashboard(date: string, wardId: string | null) {
         capStatus: ipdDailySummary.capStatus,
     })
     .from(ipdDailySummary)
-    .leftJoin(nursingWards, eq(ipdDailySummary.wardId, nursingWards.id))
+    .innerJoin(nursingWards, eq(ipdDailySummary.wardId, nursingWards.id))
     .where(and(...summaryConditions));
 
     // Aggregate shifts
     const shiftTotals = { morning: { hn: 0, rn: 0, tn: 0, na: 0 }, afternoon: { hn: 0, rn: 0, tn: 0, na: 0 }, night: { hn: 0, rn: 0, tn: 0, na: 0 } };
-    let totalRN = 0, totalNonRN = 0;
+    let totalHN = 0, totalRnOnly = 0, totalTN = 0, totalNA = 0;
 
     shifts.forEach(s => {
         const hn = s.hnCount ?? 0;
@@ -91,9 +97,14 @@ async function getIPDDashboard(date: string, wardId: string | null) {
             shiftTotals[shiftKey].tn += tn;
             shiftTotals[shiftKey].na += na;
         }
-        totalRN += rn + hn;
-        totalNonRN += tn + na;
+        totalHN += hn;
+        totalRnOnly += rn;
+        totalTN += tn;
+        totalNA += na;
     });
+
+    const totalRN = totalHN + totalRnOnly;
+    const totalNonRN = totalTN + totalNA;
 
     // Aggregate summaries
     let totalWorkforce = 0, totalPatientDay = 0, totalProd = 0, totalCMI = 0;
@@ -126,11 +137,11 @@ async function getIPDDashboard(date: string, wardId: string | null) {
         cmi: prodCount > 0 ? parseFloat((totalCMI / prodCount).toFixed(2)) : 0,
         patientVisit: totalPatientDay,
         shifts: {
-            morning: { rn: shiftTotals.morning.hn + shiftTotals.morning.rn, nonRn: shiftTotals.morning.tn + shiftTotals.morning.na },
-            afternoon: { rn: shiftTotals.afternoon.hn + shiftTotals.afternoon.rn, nonRn: shiftTotals.afternoon.tn + shiftTotals.afternoon.na },
-            midnight: { rn: shiftTotals.night.hn + shiftTotals.night.rn, nonRn: shiftTotals.night.tn + shiftTotals.night.na },
+            morning: { rn: shiftTotals.morning.hn + shiftTotals.morning.rn, nonRn: shiftTotals.morning.tn + shiftTotals.morning.na, hn: shiftTotals.morning.hn, rnOnly: shiftTotals.morning.rn, tn: shiftTotals.morning.tn, na: shiftTotals.morning.na },
+            afternoon: { rn: shiftTotals.afternoon.hn + shiftTotals.afternoon.rn, nonRn: shiftTotals.afternoon.tn + shiftTotals.afternoon.na, hn: shiftTotals.afternoon.hn, rnOnly: shiftTotals.afternoon.rn, tn: shiftTotals.afternoon.tn, na: shiftTotals.afternoon.na },
+            midnight: { rn: shiftTotals.night.hn + shiftTotals.night.rn, nonRn: shiftTotals.night.tn + shiftTotals.night.na, hn: shiftTotals.night.hn, rnOnly: shiftTotals.night.rn, tn: shiftTotals.night.tn, na: shiftTotals.night.na },
         },
-        workforce: { rn: totalRN, nonRn: totalNonRN },
+        workforce: { rn: totalRN, nonRn: totalNonRN, hn: totalHN, rnOnly: totalRnOnly, tn: totalTN, na: totalNA },
         skillMix: {
             total: totalRN + totalNonRN,
             onDuty: totalRN + totalNonRN,
@@ -175,40 +186,86 @@ async function getOPDDashboard(date: string, wardId: string | null, deptType: st
 
     let totalRN = 0, totalNonRN = 0, totalPatients = 0, totalWorkload = 0;
     const wardData: { name: string; prod: number }[] = [];
+    const shiftStaff: Record<string, { rn: number; nonRn: number; workload: number }> = {
+        morning: { rn: 0, nonRn: 0, workload: 0 },
+        afternoon: { rn: 0, nonRn: 0, workload: 0 },
+        night: { rn: 0, nonRn: 0, workload: 0 },
+        midnight: { rn: 0, nonRn: 0, workload: 0 },
+    };
 
     filteredShifts.forEach(s => {
         totalRN += s.rnCount ?? 0;
         totalNonRN += s.nonRnCount ?? 0;
         totalPatients += s.patientTotal ?? 0;
-        totalWorkload += parseFloat(s.workloadScore ?? '0');
+        const wl = parseFloat(s.workloadScore ?? '0');
+        totalWorkload += wl;
+
+        // Per-shift staff
+        const shiftKey = s.shift === 'night' ? 'midnight' : s.shift;
+        if (shiftStaff[shiftKey] || shiftStaff[s.shift]) {
+            const key = shiftStaff[shiftKey] ? shiftKey : s.shift;
+            shiftStaff[key].rn += s.rnCount ?? 0;
+            shiftStaff[key].nonRn += s.nonRnCount ?? 0;
+            shiftStaff[key].workload += wl;
+        }
     });
 
     // Group by ward for chart
-    const wardMap: { [key: string]: number } = {};
+    const wardMap: { [key: string]: { workload: number; staff: number } } = {};
     filteredShifts.forEach(s => {
         const name = s.wardName ?? 'Unknown';
-        wardMap[name] = (wardMap[name] ?? 0) + parseFloat(s.workloadScore ?? '0');
+        if (!wardMap[name]) {
+            wardMap[name] = { workload: 0, staff: 0 };
+        }
+        wardMap[name].workload += parseFloat(s.workloadScore ?? '0');
+        wardMap[name].staff += (s.rnCount ?? 0) + (s.nonRnCount ?? 0);
     });
-    Object.entries(wardMap).forEach(([name, score]) => {
-        wardData.push({ name, prod: parseFloat(score.toFixed(2)) });
+    
+    Object.entries(wardMap).forEach(([name, data]) => {
+        if (data.staff > 0) {
+            const expect = data.workload / 7;
+            const prod = (expect / data.staff) * 100;
+            wardData.push({ name, prod: parseFloat(prod.toFixed(2)) });
+        } else {
+            wardData.push({ name, prod: 0 });
+        }
     });
+
+    // Calculate OPD productivity using LR Standard Formula:
+    // 1. Nursing Need (Workload) = totalWorkload (Sum of count * multiplier)
+    // 2. Expect Staff = Workload / 7 (hours per shift)
+    // 3. Actual Staff = totalStaff (RN + Non-RN)
+    // 4. Productivity = (Expect / Actual) * 100
+    const totalStaff = totalRN + totalNonRN;
+    const expectStaff = totalWorkload / 7;
+    const opdProductivity = totalStaff > 0
+        ? parseFloat(((expectStaff / totalStaff) * 100).toFixed(2))
+        : 0;
+
+    // Helper to enrich shift with productivity
+    const enrichShift = (s: { rn: number; nonRn: number; workload: number }) => {
+        const actual = s.rn + s.nonRn;
+        const expect = s.workload / 7;
+        const prod = actual > 0 ? (expect / actual) * 100 : 0;
+        return { ...s, actual, expect, productivity: parseFloat(prod.toFixed(2)) };
+    };
 
     return {
         date,
         deptType,
-        productivity: 0,
-        totalWorkforce: totalRN + totalNonRN,
+        productivity: opdProductivity,
+        totalWorkforce: totalStaff,
         cmi: 0,
         patientVisit: totalPatients,
         shifts: {
-            morning: { rn: 0, nonRn: 0 },
-            afternoon: { rn: 0, nonRn: 0 },
-            midnight: { rn: 0, nonRn: 0 },
+            morning: enrichShift(shiftStaff.morning),
+            afternoon: enrichShift(shiftStaff.afternoon),
+            midnight: enrichShift(shiftStaff.midnight),
         },
         workforce: { rn: totalRN, nonRn: totalNonRN },
         skillMix: {
-            total: totalRN + totalNonRN,
-            onDuty: totalRN + totalNonRN,
+            total: totalStaff,
+            onDuty: totalStaff,
             ratio: totalNonRN > 0 ? `1:${Math.round(totalRN / totalNonRN)}` : '-',
         },
         capStatus: { suitable: 0, improve: 0, shortage: 0 },

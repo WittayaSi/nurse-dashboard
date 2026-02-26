@@ -8,6 +8,7 @@ import {
     date,
     timestamp,
     unique,
+    jsonb,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -20,6 +21,8 @@ export const nursingWards = pgTable('nursing_wards', {
     name: varchar('name', { length: 100 }).notNull(),
     deptType: varchar('dept_type', { length: 10 }).notNull(), // IPD, OPD, ER, LR
     isActive: boolean('is_active').default(true),
+    // Per-ward OPD workload field config (groups of fields with multipliers)
+    opdFieldsConfig: jsonb('opd_fields_config'),
     createdAt: timestamp('created_at').defaultNow(),
     updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -88,6 +91,9 @@ export const opdDailyShifts = pgTable('opd_daily_shifts', {
     ivpCount: integer('ivp_count').default(0),   // IVP (x2.0)
     emsCount: integer('ems_count').default(0),   // EMS (x1.5)
     lrCount: integer('lr_count').default(0),     // จินสูตร/LR (x3.5)
+
+    // Dynamic category data (JSONB) — stores per-ward flexible fields
+    categoryData: jsonb('category_data'),
 
     // Workload Score (คำนวณ)
     workloadScore: numeric('workload_score', { precision: 8, scale: 2 }).default('0'),

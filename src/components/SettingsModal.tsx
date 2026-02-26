@@ -52,25 +52,27 @@ export default function SettingsModal({ isOpen, onClose, onConnect, initialSetti
                 {/* Content */}
                 <div className="p-6 max-h-[80vh] overflow-y-auto">
                     <div className="flex items-center gap-4 mb-6">
-                        <img src="https://www.gstatic.com/images/branding/product/2x/sheets_2020q4_48dp.png" alt="Google Sheets" className="w-12 h-12" />
+                        <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center">
+                            <i className="fa-solid fa-database text-indigo-600 text-xl"></i>
+                        </div>
                         <div>
-                            <h3 className="font-bold text-gray-800 text-lg">Connect to Google Sheets</h3>
-                            <p className="text-xs text-gray-500">เชื่อมต่อข้อมูลจาก Google Sheets (Share Link)</p>
+                            <h3 className="font-bold text-gray-800 text-lg">เชื่อมต่อแหล่งข้อมูล</h3>
+                            <p className="text-xs text-gray-500">ตั้งค่าการเชื่อมต่อข้อมูล (Share Link)</p>
                         </div>
                     </div>
                     
                     {/* Main URL */}
                     <div className="mb-5">
-                        <label className="text-xs font-bold text-gray-700 mb-1 block uppercase tracking-wider">📎 Google Sheets URL</label>
+                        <label className="text-xs font-bold text-gray-700 mb-1 block uppercase tracking-wider">📎 Data Source URL</label>
                         <input 
                             type="text" 
                             value={settings.mainUrl}
                             onChange={(e) => setSettings({ ...settings, mainUrl: e.target.value })}
-                            placeholder="https://docs.google.com/spreadsheets/d/YOUR_ID/edit..." 
+                            placeholder="https://..." 
                             className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 focus:outline-none transition-all text-sm"
                         />
                         <p className="text-[10px] text-gray-400 mt-2 flex items-center gap-1">
-                            <i className="fa-solid fa-circle-info"></i> ใช้ลิงก์จากปุ่ม <b>Share</b> -&gt; <b>Copy link</b> (Anyone with the link)
+                            <i className="fa-solid fa-circle-info"></i> วาง URL สำหรับเชื่อมต่อข้อมูล
                         </p>
                     </div>
                     
@@ -113,7 +115,7 @@ export default function SettingsModal({ isOpen, onClose, onConnect, initialSetti
                     
                     <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 mb-6">
                         <p className="text-[11px] text-amber-800 leading-relaxed">
-                            <b>Tip:</b> เพื่อความง่ายที่สุด ให้เปิด Sheet ที่ต้องการ แล้ว <b>ก๊อปปี้ URL ทั้งหมด</b> จากด้านบนมาวางในช่องได้เลยครับ (ระบบจะดึงเลข GID ให้เอง)
+                            <b>Tip:</b> ก๊อปปี้ URL มาวางในช่องได้เลย ระบบจะดึงข้อมูลให้อัตโนมัติ
                         </p>
                     </div>
                     

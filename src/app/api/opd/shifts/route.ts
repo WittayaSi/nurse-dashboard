@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
             rnCount: opdDailyShifts.rnCount,
             nonRnCount: opdDailyShifts.nonRnCount,
             patientTotal: opdDailyShifts.patientTotal,
+            // Legacy columns (for backward compat)
             triage1: opdDailyShifts.triage1,
             triage2: opdDailyShifts.triage2,
             triage3: opdDailyShifts.triage3,
@@ -32,7 +33,10 @@ export async function GET(request: NextRequest) {
             ivpCount: opdDailyShifts.ivpCount,
             emsCount: opdDailyShifts.emsCount,
             lrCount: opdDailyShifts.lrCount,
+            // New flexible data
+            categoryData: opdDailyShifts.categoryData,
             workloadScore: opdDailyShifts.workloadScore,
+            updatedAt: opdDailyShifts.updatedAt,
         })
         .from(opdDailyShifts)
         .leftJoin(nursingWards, eq(opdDailyShifts.wardId, nursingWards.id))
@@ -61,20 +65,43 @@ export async function POST(request: NextRequest) {
             }
         }
 
+        // Load ward config for workload calculation
+        const wardIds = [...new Set(rows.map((r: any) => r.wardId))];
+        const wardConfigs: Record<number, any> = {};
+        for (const wid of wardIds) {
+            const ward = await db.select({ opdFieldsConfig: nursingWards.opdFieldsConfig })
+                .from(nursingWards)
+                .where(eq(nursingWards.id, wid as number));
+            if (ward.length > 0) wardConfigs[wid as number] = ward[0].opdFieldsConfig;
+        }
+
         // Calculate workload score for each row
         const values = rows.map(row => {
-            const t1 = row.triage1 ?? 0;
-            const t2 = row.triage2 ?? 0;
-            const t3 = row.triage3 ?? 0;
-            const t4 = row.triage4 ?? 0;
-            const t5 = row.triage5 ?? 0;
-            const ivp = row.ivpCount ?? 0;
-            const ems = row.emsCount ?? 0;
-            const lr = row.lrCount ?? 0;
+            const categoryData = row.categoryData ?? {};
+            const wardConfig = wardConfigs[row.wardId];
 
-            const workload = (t1 * 3.2) + (t2 * 2.5) + (t3 * 1.0)
-                + (t4 * 0.5) + (t5 * 0.25)
-                + (ivp * 2.0) + (ems * 1.5) + (lr * 3.5);
+            // Calculate workload from ward config + categoryData
+            let workload = 0;
+            if (wardConfig && wardConfig.groups) {
+                for (const group of wardConfig.groups) {
+                    for (const field of group.fields) {
+                        workload += (categoryData[field.key] ?? 0) * (field.multiplier ?? 1);
+                    }
+                }
+            } else {
+                // Fallback to legacy calculation if no config
+                const t1 = row.triage1 ?? 0;
+                const t2 = row.triage2 ?? 0;
+                const t3 = row.triage3 ?? 0;
+                const t4 = row.triage4 ?? 0;
+                const t5 = row.triage5 ?? 0;
+                const ivp = row.ivpCount ?? 0;
+                const ems = row.emsCount ?? 0;
+                const lr = row.lrCount ?? 0;
+                workload = (t1 * 3.2) + (t2 * 2.5) + (t3 * 1.0)
+                    + (t4 * 0.5) + (t5 * 0.25)
+                    + (ivp * 2.0) + (ems * 1.5) + (lr * 3.5);
+            }
 
             return {
                 wardId: row.wardId,
@@ -83,14 +110,17 @@ export async function POST(request: NextRequest) {
                 rnCount: row.rnCount ?? 0,
                 nonRnCount: row.nonRnCount ?? 0,
                 patientTotal: row.patientTotal ?? 0,
-                triage1: t1,
-                triage2: t2,
-                triage3: t3,
-                triage4: t4,
-                triage5: t5,
-                ivpCount: ivp,
-                emsCount: ems,
-                lrCount: lr,
+                // Legacy columns
+                triage1: row.triage1 ?? 0,
+                triage2: row.triage2 ?? 0,
+                triage3: row.triage3 ?? 0,
+                triage4: row.triage4 ?? 0,
+                triage5: row.triage5 ?? 0,
+                ivpCount: row.ivpCount ?? 0,
+                emsCount: row.emsCount ?? 0,
+                lrCount: row.lrCount ?? 0,
+                // New flexible data
+                categoryData: Object.keys(categoryData).length > 0 ? categoryData : null,
                 workloadScore: workload.toFixed(2),
             };
         });
@@ -111,6 +141,7 @@ export async function POST(request: NextRequest) {
                     ivpCount: sql`excluded.ivp_count`,
                     emsCount: sql`excluded.ems_count`,
                     lrCount: sql`excluded.lr_count`,
+                    categoryData: sql`excluded.category_data`,
                     workloadScore: sql`excluded.workload_score`,
                     updatedAt: new Date(),
                 },

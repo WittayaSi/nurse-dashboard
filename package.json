@@ -12,6 +12,8 @@
     "@fortawesome/fontawesome-free": "^7.1.0",
     "chart.js": "^4.5.1",
     "drizzle-orm": "^0.45.1",
+    "exceljs": "^4.4.0",
+    "file-saver": "^2.0.5",
     "next": "16.1.6",
     "papaparse": "^5.5.3",
     "pg": "^8.18.0",

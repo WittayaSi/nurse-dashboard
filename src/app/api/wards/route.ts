@@ -12,9 +12,11 @@ export async function GET(request: NextRequest) {
         let result;
         if (deptType) {
             result = await db.select().from(nursingWards)
-                .where(eq(nursingWards.deptType, deptType));
+                .where(eq(nursingWards.deptType, deptType))
+                .orderBy(nursingWards.code);
         } else {
-            result = await db.select().from(nursingWards);
+            result = await db.select().from(nursingWards)
+                .orderBy(nursingWards.code);
         }
 
         return NextResponse.json(result);

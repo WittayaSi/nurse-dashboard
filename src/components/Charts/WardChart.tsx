@@ -57,5 +57,14 @@ export default function WardChart({ wardData, deptType }: WardChartProps) {
         }
     };
 
+    if (!wardData || wardData.length === 0) {
+        return (
+            <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 bg-gray-50/50 rounded-2xl border border-dashed border-gray-200 min-h-[300px]">
+                <i className="fa-solid fa-chart-bar text-4xl mb-3 opacity-50"></i>
+                <p>ไม่มีข้อมูลผลการปฏิบัติงานสำหรับวันที่และหน่วยงานที่เลือก</p>
+            </div>
+        );
+    }
+
     return <Bar data={data} options={options} />;
 }

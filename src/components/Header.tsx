@@ -81,9 +81,9 @@ export default function Header({
                     </div>
 
                     {/* Settings Button */}
-                    <button onClick={onOpenSettings} className="bg-white text-gray-600 hover:text-indigo-600 border border-gray-200 w-10 h-10 rounded-xl shadow-sm transition-all flex items-center justify-center mr-2">
+                    {/* <button onClick={onOpenSettings} className="bg-white text-gray-600 hover:text-indigo-600 border border-gray-200 w-10 h-10 rounded-xl shadow-sm transition-all flex items-center justify-center mr-2">
                         <i className="fa-solid fa-gear"></i>
-                    </button>
+                    </button> */}
 
                     {/* Refresh Button */}
                     <button onClick={onRefresh} className="gradient-header hover:opacity-90 text-white w-10 h-10 rounded-xl shadow-lg transition-all flex items-center justify-center">

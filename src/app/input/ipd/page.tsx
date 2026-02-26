@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 
 interface Ward {
     id: number;
@@ -90,14 +90,20 @@ function LoadingSkeleton() {
 
 export default function IPDInputPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const initDate = searchParams.get('date') || new Date().toISOString().split('T')[0];
+    const initWardCode = searchParams.get('ward_code') || '';
+
     const [wards, setWards] = useState<Ward[]>([]);
     const [selectedWard, setSelectedWard] = useState<number>(0);
-    const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
+    const [urlWardCode, setUrlWardCode] = useState<string>(initWardCode);
+    const [date, setDate] = useState<string>(initDate);
     const [shifts, setShifts] = useState<{ morning: ShiftData; afternoon: ShiftData; night: ShiftData }>({
         morning: emptyShift(), afternoon: emptyShift(), night: emptyShift()
     });
     const [summary, setSummary] = useState<SummaryData>(emptySummary());
     const [saving, setSaving] = useState(false);
+    const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; wardName: string; dateStr: string } | null>(null);
     const [hasExistingData, setHasExistingData] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -140,15 +146,49 @@ export default function IPDInputPage() {
         setIsDirty(shiftsChanged || summaryChanged);
     }, [shifts, summary, readonly]);
 
+    // Sync state to URL
+    const pathname = usePathname();
+    useEffect(() => {
+        const params = new URLSearchParams(searchParams.toString());
+        let changed = false;
+        
+        const currentWard = wards.find(w => w.id === selectedWard);
+        if (selectedWard && currentWard) {
+            if (params.get('ward_code') !== currentWard.code) {
+                params.set('ward_code', currentWard.code);
+                changed = true;
+            }
+        }
+        if (params.get('date') !== date) { 
+            params.set('date', date); 
+            changed = true; 
+        }
+        
+        if (changed) {
+            router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+        }
+    }, [selectedWard, wards, date, pathname, router, searchParams]);
+
     useEffect(() => {
         fetch('/api/wards?deptType=IPD')
             .then(res => res.json())
             .then(data => {
                 setWards(data);
-                if (data.length > 0) setSelectedWard(data[0].id);
+                if (data.length > 0) {
+                    if (urlWardCode) {
+                        const matchedWard = data.find((w: Ward) => w.code === urlWardCode);
+                        if (matchedWard) {
+                            setSelectedWard(matchedWard.id);
+                        } else {
+                            setSelectedWard(data[0].id);
+                        }
+                    } else {
+                        setSelectedWard(data[0].id);
+                    }
+                }
             })
             .catch(err => console.error('Error loading wards:', err));
-    }, []);
+    }, [urlWardCode]);
 
     useEffect(() => {
         if (!selectedWard || !date) return;
@@ -268,11 +308,15 @@ export default function IPDInputPage() {
         // Confirmation dialog for update mode
         if (isEditing) {
             const wardName = wards.find(w => w.id === selectedWard)?.name || '';
-            const confirmed = window.confirm(
-                `ยืนยันการอัพเดทข้อมูล?\n\nหอผู้ป่วย: ${wardName}\nวันที่: ${date.split('-').reverse().join('/')}\n\nข้อมูลเดิมจะถูกเขียนทับ`
-            );
-            if (!confirmed) return;
+            setConfirmDialog({ open: true, wardName, dateStr: date.split('-').reverse().join('/') });
+            return;
         }
+
+        doSave();
+    };
+
+    const doSave = async () => {
+        setConfirmDialog(null);
 
         setSaving(true);
         try {
@@ -326,6 +370,53 @@ export default function IPDInputPage() {
         <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-4 md:p-6">
             {/* Toast Notifications */}
             <Toast toasts={toasts} onDismiss={dismissToast} />
+
+            {/* Confirm Dialog */}
+            {confirmDialog?.open && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setConfirmDialog(null)}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden animate-scale-in" onClick={e => e.stopPropagation()}>
+                        <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-4 flex items-center gap-3 text-white">
+                            <div className="bg-white/20 p-2 rounded-lg">
+                                <i className="fa-solid fa-triangle-exclamation text-xl"></i>
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-lg">ยืนยันการอัพเดทข้อมูล</h3>
+                                <p className="text-white/80 text-xs">ข้อมูลเดิมจะถูกเขียนทับ</p>
+                            </div>
+                        </div>
+                        <div className="px-6 py-5 space-y-3">
+                            <div className="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-3">
+                                <i className="fa-solid fa-hospital text-teal-500"></i>
+                                <div>
+                                    <p className="text-[10px] text-gray-400 uppercase font-bold">หอผู้ป่วย</p>
+                                    <p className="text-sm font-bold text-gray-800">{confirmDialog.wardName}</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-3">
+                                <i className="fa-solid fa-calendar text-indigo-500"></i>
+                                <div>
+                                    <p className="text-[10px] text-gray-400 uppercase font-bold">วันที่</p>
+                                    <p className="text-sm font-bold text-gray-800">{confirmDialog.dateStr}</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="px-6 pb-5 flex gap-3">
+                            <button onClick={() => setConfirmDialog(null)}
+                                className="flex-1 px-4 py-2.5 border-2 border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">
+                                ยกเลิก
+                            </button>
+                            <button onClick={doSave}
+                                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl text-sm font-bold shadow-lg hover:shadow-xl hover:opacity-95 transition-all active:scale-95">
+                                <i className="fa-solid fa-check mr-1"></i> ยืนยัน
+                            </button>
+                        </div>
+                    </div>
+                    <style jsx>{`
+                        @keyframes scale-in { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+                        .animate-scale-in { animation: scale-in 0.2s ease-out; }
+                    `}</style>
+                </div>
+            )}
 
             {/* Header */}
             <header className="flex items-center justify-between mb-6">
@@ -389,62 +480,63 @@ export default function IPDInputPage() {
             {/* Loading Skeleton or Content */}
             {loading ? <LoadingSkeleton /> : (
                 <>
-                    {/* Shift Data Table */}
+                    {/* Shift Data — all shifts in one row */}
                     <section className="card-kpi p-0 mb-6 overflow-hidden" aria-label="ข้อมูลกำลังคนรายเวร">
                         <div className="gradient-header px-5 py-3 text-white flex items-center gap-2">
                             <i className="fa-solid fa-clock" aria-hidden="true"></i>
                             <span className="font-bold">ข้อมูลกำลังคนรายเวร</span>
                         </div>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm" aria-label="ตารางกำลังคนรายเวร">
-                                <thead className="bg-gray-50 text-gray-600">
-                                    <tr>
-                                        <th scope="col" className="px-4 py-3 text-left font-bold">เวร</th>
-                                        <th scope="col" className="px-4 py-3 text-center font-bold">HN</th>
-                                        <th scope="col" className="px-4 py-3 text-center font-bold">RN</th>
-                                        <th scope="col" className="px-4 py-3 text-center font-bold">TN</th>
-                                        <th scope="col" className="px-4 py-3 text-center font-bold">NA</th>
-                                        <th scope="col" className="px-4 py-3 text-center font-bold bg-gray-100">รวม</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100">
-                                    {shiftLabels.map(({ key, label, bg }) => (
-                                        <tr key={key} className={`${bg} hover:brightness-95 transition-colors`}>
-                                            <td className="px-4 py-3 font-bold text-gray-700">{label}</td>
-                                            {(['hnCount', 'rnCount', 'tnCount', 'naCount'] as const).map(field => (
-                                                <td key={field} className="px-2 py-2 text-center">
-                                                    <input
-                                                        id={`ipd-${key}-${field}`}
-                                                        type="number"
-                                                        min="0"
-                                                        inputMode="numeric"
-                                                        value={shifts[key][field] || ''}
-                                                        onChange={(e) => handleShiftChange(key, field, e.target.value)}
-                                                        disabled={readonly}
-                                                        aria-label={`${fieldLabels[field]} เวร${shiftThaiLabels[key]}`}
-                                                        className={`w-20 px-2 py-2.5 text-center border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300 font-bold transition-colors ${readonly ? 'bg-gray-100 border-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white border-gray-200 focus:border-indigo-400 text-gray-700'}`}
-                                                    />
-                                                </td>
-                                            ))}
-                                            <td className="px-4 py-3 text-center font-bold text-indigo-700 bg-indigo-50/50"
-                                                aria-live="polite" aria-label={`รวมเวร${shiftThaiLabels[key]}`}>
-                                                {totalStaff(shifts[key])}
-                                            </td>
-                                        </tr>
+
+                        {/* Shift column headers */}
+                        <div className="grid border-b border-gray-200" style={{ gridTemplateColumns: `120px repeat(3, 1fr) 80px` }}>
+                            <div className="bg-gray-50 px-3 py-2"></div>
+                            {shiftLabels.map(({ key, label, bg }) => (
+                                <div key={key} className={`${bg} px-3 py-2 text-center border-l border-gray-200`}>
+                                    <span className="font-bold text-gray-700 text-sm">{label}</span>
+                                </div>
+                            ))}
+                            <div className="bg-gray-100 px-2 py-2 text-center border-l border-gray-200">
+                                <span className="font-bold text-gray-600 text-xs">รวม</span>
+                            </div>
+                        </div>
+
+                        <div className="p-4 space-y-2">
+                            {/* Staff rows */}
+                            {(['hnCount', 'rnCount', 'tnCount', 'naCount'] as const).map(field => (
+                                <div key={field} className="grid items-center gap-2" style={{ gridTemplateColumns: `120px repeat(3, 1fr) 80px` }}>
+                                    <div className={`text-xs font-bold px-1 ${field === 'rnCount' ? 'text-pink-600' : field === 'naCount' ? 'text-amber-600' : 'text-gray-600'}`}>
+                                        {fieldLabels[field]}
+                                    </div>
+                                    {shiftLabels.map(({ key }) => (
+                                        <input key={key}
+                                            type="number" min="0" inputMode="numeric"
+                                            value={shifts[key][field] || ''}
+                                            onChange={(e) => handleShiftChange(key, field, e.target.value)}
+                                            disabled={readonly}
+                                            aria-label={`${fieldLabels[field]} เวร${shiftThaiLabels[key]}`}
+                                            className={`w-full px-1 py-1.5 border rounded-lg text-center text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-300 transition-colors ${readonly ? 'bg-gray-100 border-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white border-gray-200 text-gray-700'}`}
+                                        />
                                     ))}
-                                    <tr className="bg-gray-50 font-bold">
-                                        <td className="px-4 py-3 text-gray-800">📊 รวมทั้งวัน</td>
-                                        <td className="px-4 py-3 text-center">{shifts.morning.hnCount + shifts.afternoon.hnCount + shifts.night.hnCount}</td>
-                                        <td className="px-4 py-3 text-center text-pink-600">{shifts.morning.rnCount + shifts.afternoon.rnCount + shifts.night.rnCount}</td>
-                                        <td className="px-4 py-3 text-center">{shifts.morning.tnCount + shifts.afternoon.tnCount + shifts.night.tnCount}</td>
-                                        <td className="px-4 py-3 text-center text-amber-600">{shifts.morning.naCount + shifts.afternoon.naCount + shifts.night.naCount}</td>
-                                        <td className="px-4 py-3 text-center text-indigo-700 bg-indigo-100 text-lg"
-                                            aria-live="polite" aria-label="รวมบุคลากรทั้งวัน">
-                                            {totalAllShifts}
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                                    <div className="text-center text-sm font-bold text-indigo-700 bg-indigo-50 rounded-lg py-1.5">
+                                        {shifts.morning[field] + shifts.afternoon[field] + shifts.night[field]}
+                                    </div>
+                                </div>
+                            ))}
+
+                            {/* Total row */}
+                            <hr className="border-gray-100" />
+                            <div className="grid items-center gap-2" style={{ gridTemplateColumns: `120px repeat(3, 1fr) 80px` }}>
+                                <div className="text-xs font-bold text-gray-700 px-1">📊 รวม</div>
+                                {shiftLabels.map(({ key }) => (
+                                    <div key={key} className="text-center text-sm font-bold text-gray-700 bg-gray-50 rounded-lg py-1.5">
+                                        {totalStaff(shifts[key])}
+                                    </div>
+                                ))}
+                                <div className="text-center text-base font-bold text-indigo-700 bg-indigo-100 rounded-lg py-1.5"
+                                    aria-live="polite" aria-label="รวมบุคลากรทั้งวัน">
+                                    {totalAllShifts}
+                                </div>
+                            </div>
                         </div>
                     </section>
 

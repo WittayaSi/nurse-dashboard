@@ -7,9 +7,10 @@ interface HeroCardProps {
     icon: string;
     gradient: string;
     target?: string;
+    belowTarget?: boolean;
 }
 
-export default function HeroCard({ title, value, subtitle, icon, gradient, target }: HeroCardProps) {
+export default function HeroCard({ title, value, subtitle, icon, gradient, target, belowTarget }: HeroCardProps) {
     return (
         <div className="relative overflow-hidden rounded-2xl p-6 text-center text-white shadow-xl" 
              style={{ background: gradient }}>
@@ -22,7 +23,14 @@ export default function HeroCard({ title, value, subtitle, icon, gradient, targe
                     </div>
                     <h3 className="text-white/90 text-sm font-bold uppercase tracking-wider">{title}</h3>
                 </div>
-                <div className="text-5xl font-extrabold mb-2 drop-shadow-lg">{value}</div>
+                <div className={`text-5xl font-extrabold mb-2 drop-shadow-lg ${belowTarget ? 'text-red-300' : ''}`}>
+                    {value}
+                </div>
+                {belowTarget && (
+                    <div className="inline-flex items-center gap-1 bg-red-500/30 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold mb-2">
+                        <i className="fa-solid fa-triangle-exclamation"></i> ต่ำกว่าเป้า
+                    </div>
+                )}
                 <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-1.5 rounded-full text-sm font-semibold">
                     <i className="fa-solid fa-bullseye"></i>
                     <span>{subtitle} {target && `: ${target}`}</span>

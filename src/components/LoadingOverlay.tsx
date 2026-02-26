@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface LoadingOverlayProps {
     isLoading: boolean;
@@ -6,7 +6,19 @@ interface LoadingOverlayProps {
 }
 
 export default function LoadingOverlay({ isLoading, message = 'กรุณารอสักครู่...' }: LoadingOverlayProps) {
-    if (!isLoading) return null;
+    const [show, setShow] = useState(false);
+
+    useEffect(() => {
+        let timer: NodeJS.Timeout;
+        if (isLoading) {
+            timer = setTimeout(() => setShow(true), 200); // 200ms delay to prevent flashing
+        } else {
+            setShow(false);
+        }
+        return () => clearTimeout(timer);
+    }, [isLoading]);
+
+    if (!show) return null;
 
     return (
         <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-[60] flex flex-col items-center justify-center transition-opacity duration-300">
