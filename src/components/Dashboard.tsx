@@ -1,27 +1,18 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import Header from './Header';
 import HeroCard from './HeroCard';
 import StatCard from './StatCard';
 import WardChart from './Charts/WardChart';
 import SkillMixChart from './Charts/SkillMixChart';
 import CapStatusChart from './Charts/CapStatusChart';
-import SettingsModal, { AppSettings } from './SettingsModal';
 import LoadingOverlay from './LoadingOverlay';
-import { parseCSV, convertToCSVUrl, SheetRow, normalizeDate } from '@/lib/sheets';
-
-const wardsIPD = [
-    "18 อายุรกรรม", "17 ผู้ป่วยหนัก", "10 ศัลยกรรม", "6 EENT", 
-    "4 ออร์โธปิดิกส์", "3 กุมาร", "2 สูติ-นรีเวช", "1 ฉุกเฉิน ICU"
-];
-const wardsOPD = [
-    "OPD อายุรกรรม", "OPD ศัลยกรรม", "OPD สูติ-นรีเวช", "OPD เด็ก", 
-    "ห้องฉุกเฉิน (ER)", "เภสัชกรรม", "ทันตกรรม", "ลงทะเบียน"
-];
 
 interface DashboardData {
     deptType: 'IPD' | 'OPD';
+    date: string;
     productivity: number;
     totalWorkforce: number;
     cmi: number;
@@ -39,6 +30,7 @@ interface DashboardData {
 
 const initialData: DashboardData = {
     deptType: 'IPD',
+    date: '',
     productivity: 0,
     totalWorkforce: 0,
     cmi: 0,
@@ -57,531 +49,73 @@ const initialData: DashboardData = {
 export default function Dashboard() {
     const [dept, setDept] = useState<'IPD' | 'OPD'>('IPD');
     const [ward, setWard] = useState<string>('all');
-    const [date, setDate] = useState<string>('');
+    const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
     const [loading, setLoading] = useState<boolean>(false);
-    const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
-    
-    const [settings, setSettings] = useState<AppSettings>({
-        mainUrl: '',
-        summarySheet: 'Daily_Summary',
-        ipdSheet: 'IPD_Workforce',
-        opdSheet: 'OPD_Workforce'
-    });
-
     const [data, setData] = useState<DashboardData>(initialData);
-    
-    // Raw Data
-    const [sheetsData, setSheetsData] = useState<SheetRow[] | null>(null);
-    const [ipdWorkforceData, setIpdWorkforceData] = useState<SheetRow[] | null>(null);
-    const [opdWorkforceData, setOpdWorkforceData] = useState<SheetRow[] | null>(null);
+    const [wards, setWards] = useState<{ id: number; name: string; code: string }[]>([]);
 
-    // Helper function to load settings from JSON file via API
-    const loadSettings = useCallback(async (): Promise<AppSettings | null> => {
-        try {
-            const res = await fetch('/api/settings');
-            if (res.ok) {
-                const settings = await res.json();
-                console.log('Loaded settings from settings.json:', settings);
-                return settings as AppSettings;
-            }
-        } catch (error) {
-            console.error('Failed to load settings from settings.json:', error);
-        }
-        return null;
-    }, []);
-
-    // Helper function to save settings to JSON file via API
-    const saveSettings = useCallback(async (newSettings: AppSettings) => {
-        try {
-            const res = await fetch('/api/settings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(newSettings)
-            });
-            if (res.ok) {
-                console.log('Saved settings to settings.json:', newSettings);
-            }
-        } catch (error) {
-            console.error('Failed to save settings to settings.json:', error);
-        }
-    }, []);
-
-    // Initialize
+    // Load wards from DB
     useEffect(() => {
-        const init = async () => {
-            const today = new Date().toISOString().split('T')[0];
-            setDate(today);
-            
-            // Load settings from JSON file
-            const savedSettings = await loadSettings();
-            
-            if (savedSettings && savedSettings.mainUrl) {
-                console.log('Found saved settings, auto-connecting...');
-                setSettings(savedSettings);
-                // Auto connect if URL exists
-                setTimeout(() => connectAllSheets(savedSettings), 500);
-            } else {
-                console.log('No saved settings found');
+        const loadWards = async () => {
+            try {
+                const res = await fetch(`/api/wards?deptType=${dept}`);
+                const wardData = await res.json();
+                setWards(wardData);
+            } catch (err) {
+                console.error('Error loading wards:', err);
             }
         };
-        init();
-    }, [loadSettings]);
+        loadWards();
+    }, [dept]);
 
-    // Update data when filters or raw data change
-    useEffect(() => {
-        calculateDashboardData();
-    }, [dept, ward, date, sheetsData, ipdWorkforceData, opdWorkforceData]);
-
-    const connectAllSheets = async (newSettings: AppSettings) => {
+    // Fetch dashboard data
+    const fetchDashboard = useCallback(async () => {
         setLoading(true);
         try {
-            // Save settings to JSON file
-            await saveSettings(newSettings);
-            setSettings(newSettings);
+            const params = new URLSearchParams({ deptType: dept });
+            if (date) params.set('date', date);
+            if (ward !== 'all') params.set('wardId', ward);
 
-            // Resolve GIDs (Simplified: assumes user might paste URL or we use default logic)
-            // For now, we'll try to fetch using the provided inputs as is, or resolve if they are names
-            // But since we are server-side proxying, we can just try to fetch.
-            // However, we need the GID to construct the CSV URL.
-            // If the user pasted the full URL into the input, we can extract GID.
-            
-            // Helper to extract GID or return input if it's a number
-            const resolveGid = async (input: string, spreadsheetId: string): Promise<string | null> => {
-                console.log(`resolveGid called with input: "${input}", spreadsheetId: "${spreadsheetId}"`);
-                
-                if (!input) {
-                    console.log('resolveGid: Input is empty/null');
-                    return null;
-                }
-                
-                // If URL with gid
-                const gidMatch = input.match(/gid=(\d+)/);
-                if (gidMatch) {
-                    console.log(`resolveGid: Found GID in URL: ${gidMatch[1]}`);
-                    return gidMatch[1];
-                }
-                
-                // If it's a pure number
-                if (/^\d+$/.test(input)) {
-                    console.log(`resolveGid: Input is direct GID: ${input}`);
-                    return input;
-                }
-                
-                // If it's a sheet name, try to find GID from the spreadsheet
-                console.log(`resolveGid: Attempting to resolve sheet name: "${input}"`);
-                try {
-                    const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
-                    const res = await fetch(`/api/sheets?url=${encodeURIComponent(url)}`);
-                    const html = await res.text();
-                    
-                    console.log(`resolveGid: Fetched HTML length: ${html.length}`);
-                    
-                    // Try multiple patterns found in Google Sheets HTML
-                    const safeName = input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                    
-                    // Pattern 1: JSON-like structure with name and gid
-                    const patterns = [
-                        new RegExp(`"name"\\s*:\\s*"${safeName}"[^}]*"gid"\\s*:\\s*"?(\\d+)"?`, 'i'),
-                        new RegExp(`"gid"\\s*:\\s*"?(\\d+)"?[^}]*"name"\\s*:\\s*"${safeName}"`, 'i'),
-                        new RegExp(`\\[\\d+,"${safeName}",\\d+,\\d+,\\d+,\\d+,\\d+,\\d+,\\d+,(\\d+)`, 'i'),
-                        new RegExp(`gid=(\\d+)[^"]*${safeName}`, 'i'),
-                        new RegExp(`${safeName}[^"]*gid=(\\d+)`, 'i'),
-                    ];
-                    
-                    for (let i = 0; i < patterns.length; i++) {
-                        const match = html.match(patterns[i]);
-                        if (match) {
-                            console.log(`resolveGid: Pattern ${i + 1} matched, GID: ${match[1]}`);
-                            return match[1];
-                        }
-                    }
-                    
-                    console.warn(`resolveGid: Could not find GID for sheet name: "${input}". Try pasting the full sheet URL with gid=`);
-                } catch (e) {
-                    console.error('resolveGid: Failed to resolve GID for', input, e);
-                }
-                
-                return null;
-            };
+            const res = await fetch(`/api/dashboard?${params.toString()}`);
+            if (!res.ok) throw new Error('Failed to fetch dashboard data');
 
-            // Extract Spreadsheet ID
-            let spreadsheetId = '';
-            const match = newSettings.mainUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-            if (match) spreadsheetId = match[1];
-            else throw new Error('Invalid Google Sheets URL');
+            const result = await res.json();
+            setData({ ...result, deptType: dept });
 
-            let summaryGid = await resolveGid(newSettings.summarySheet, spreadsheetId);
-            const ipdGid = await resolveGid(newSettings.ipdSheet, spreadsheetId);
-            const opdGid = await resolveGid(newSettings.opdSheet, spreadsheetId);
-
-            // FALLBACK: If summary GID is null, use GID 0 (first sheet)
-            if (!summaryGid) {
-                console.log('Using fallback GID 0 for Summary sheet');
-                summaryGid = '0';
+            // If no date was set, use the date from the API response (latest)
+            if (!date && result.date) {
+                setDate(result.date);
             }
-
-            console.log('Resolved GIDs:', { summaryGid, ipdGid, opdGid });
-
-            // Fetch Data
-            const baseUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv`;
-            
-            const loadSheet = async (gid: string | null) => {
-                if (!gid) return [];
-                const url = `${baseUrl}&gid=${gid}`;
-                const res = await fetch(`/api/sheets?url=${encodeURIComponent(url)}`);
-                if (!res.ok) throw new Error(`Failed to load sheet (GID: ${gid})`);
-                const csv = await res.text();
-                return parseCSV(csv);
-            };
-
-            const [summary, ipd, opd] = await Promise.all([
-                loadSheet(summaryGid),
-                loadSheet(ipdGid),
-                loadSheet(opdGid)
-            ]);
-
-            setSheetsData(summary);
-            setIpdWorkforceData(ipd);
-            setOpdWorkforceData(opd);
-
-            // Find the latest date from summary data and set it as default
-            if (summary.length > 0) {
-                const dates = summary
-                    .map(row => normalizeDate(String(row.date)))
-                    .filter(d => d) // filter out empty/invalid dates
-                    .sort((a, b) => b.localeCompare(a)); // sort descending
-                
-                if (dates.length > 0) {
-                    const latestDate = dates[0];
-                    console.log('Setting date to latest available:', latestDate);
-                    setDate(latestDate);
-                }
-            }
-
-            console.log('Loaded Summary Rows:', summary.length, summary[0]);
-            console.log('Loaded IPD Rows:', ipd.length, ipd[0]);
-            console.log('Loaded OPD Rows:', opd.length, opd[0]);
-            
         } catch (error: any) {
-            console.error(error);
-            alert(`Connection failed: ${error.message}`);
-            throw error; // Re-throw for modal to handle
+            console.error('Dashboard fetch error:', error);
         } finally {
             setLoading(false);
         }
-    };
+    }, [dept, ward, date]);
 
-    const calculateDashboardData = () => {
-        // Default values
-        let result: DashboardData = { ...initialData, deptType: dept };
+    // Fetch on mount and when filters change
+    useEffect(() => {
+        fetchDashboard();
+    }, [fetchDashboard]);
 
-        // If no data, return empty (but keep dept)
-        if (!sheetsData) {
-            setData(result);
-            return;
-        }
-
-        // Filter by Date
-        const filteredSummary = sheetsData.filter(row => {
-            if (!row.date) return false;
-            const rowDate = normalizeDate(String(row.date));
-            return rowDate === date;
-        });
-        
-        console.log('=== calculateDashboardData ===');
-        console.log('Total rows in sheetsData:', sheetsData.length);
-        console.log('Filtering for date:', date);
-        console.log('After date filter:', filteredSummary.length, 'rows');
-        if (sheetsData.length > 0) {
-             console.log('Sample Row:', sheetsData[0]);
-             console.log('Sample Row Date:', sheetsData[0].date, 'Normalized:', normalizeDate(String(sheetsData[0].date)));
-        }
-
-        // Filter by Dept
-        const deptSummary = filteredSummary.filter(row => 
-            String(row.dept_type).toUpperCase() === dept
-        );
-        console.log('Filter for dept:', dept);
-        console.log('After dept filter:', deptSummary.length, 'rows');
-        if (filteredSummary.length > 0) {
-            console.log('Sample row dept_type:', filteredSummary[0].dept_type);
-        }
-
-        // Filter by Ward if selected
-        let finalSummary = deptSummary;
-        if (ward !== 'all') {
-            finalSummary = deptSummary.filter(row => String(row.ward_name) === ward);
-        }
-        console.log('Filter for ward:', ward);
-        console.log('After ward filter:', finalSummary.length, 'rows');
-
-        if (finalSummary.length === 0) {
-            console.log('No matching data found, returning initial data');
-            setData(result);
-            return;
-        }
-
-        // Calculate Aggregates
-        let totalProd = 0;
-        let countProd = 0;
-        let totalWorkforce = 0;
-        let totalRN = 0;
-        let totalPN = 0;
-        let totalCMI = 0;
-        let totalPatientVisit = 0;
-        
-        // CAP
-        let capSuitable = 0;
-        let capImprove = 0;
-        let capShortage = 0;
-
-        // Shifts (IPD)
-        let morningRN = 0, morningPN = 0;
-        let afternoonRN = 0, afternoonPN = 0;
-        let midnightRN = 0, midnightPN = 0;
-
-        // Process IPD/OPD Workforce Data if available
-        if (dept === 'IPD' && ipdWorkforceData) {
-            const filteredIPD = ipdWorkforceData.filter(row => {
-                if (!row.date) return false;
-                return normalizeDate(String(row.date)) === date;
-            });
-            
-            // Filter by Ward if selected
-            const finalIPD = ward !== 'all' 
-                ? filteredIPD.filter(row => String(row.ward_name) === ward)
-                : filteredIPD;
-
-            console.log('IPD data for processing:', finalIPD.length, 'rows');
-            
-            finalIPD.forEach(row => {
-                const shiftType = String(row.shift || '').toLowerCase();
-                const rn = parseInt(String(row.rn_count)) || 0;
-                const pn = parseInt(String(row.pn_count)) || 0;
-                
-                // Add to total workforce
-                totalRN += rn;
-                totalPN += pn;
-                totalWorkforce += rn + pn;
-                
-                // Group by shift
-                if (shiftType.includes('morning') || shiftType.includes('เช้า')) {
-                    morningRN += rn;
-                    morningPN += pn;
-                } else if (shiftType.includes('afternoon') || shiftType.includes('บ่าย')) {
-                    afternoonRN += rn;
-                    afternoonPN += pn;
-                } else if (shiftType.includes('night') || shiftType.includes('ดึก') || shiftType.includes('midnight')) {
-                    midnightRN += rn;
-                    midnightPN += pn;
-                }
-                
-                // CAP Status
-                const cap = String(row.cap_status || '').toLowerCase();
-                if (cap.includes('suitable') || cap.includes('เหมาะสม')) {
-                    capSuitable++;
-                } else if (cap.includes('improve') || cap.includes('ปรับปรุง')) {
-                    capImprove++;
-                } else if (cap.includes('shortage') || cap.includes('ขาดแคลน')) {
-                    capShortage++;
-                }
-            });
-            
-            console.log('IPD Shifts calculated:', { morningRN, morningPN, afternoonRN, afternoonPN, midnightRN, midnightPN });
-        } else if (dept === 'OPD' && opdWorkforceData) {
-            const filteredOPD = opdWorkforceData.filter(row => {
-                if (!row.date) return false;
-                return normalizeDate(String(row.date)) === date;
-            });
-            
-            // Filter by Ward/Unit if selected
-            const finalOPD = ward !== 'all' 
-                ? filteredOPD.filter(row => String(row.unit_name || row.ward_name) === ward)
-                : filteredOPD;
-            
-            console.log('OPD data for processing:', finalOPD.length, 'rows');
-            
-            finalOPD.forEach(row => {
-                const rn = parseInt(String(row.rn_count)) || 0;
-                const pn = parseInt(String(row.pn_count)) || 0;
-                
-                totalRN += rn;
-                totalPN += pn;
-                totalWorkforce += rn + pn;
-                totalPatientVisit += parseInt(String(row.patient_count)) || 0;
-                
-                // CAP Status for OPD
-                const cap = String(row.cap_status || '').toLowerCase();
-                if (cap.includes('suitable') || cap.includes('เหมาะสม')) {
-                    capSuitable++;
-                } else if (cap.includes('improve') || cap.includes('ปรับปรุง')) {
-                    capImprove++;
-                } else if (cap.includes('shortage') || cap.includes('ขาดแคลน')) {
-                    capShortage++;
-                }
-            });
-            
-            console.log('OPD totals calculated:', { totalRN, totalPN, totalWorkforce, totalPatientVisit, capSuitable, capImprove, capShortage });
-        }
-
-        // Ward Data for Chart - aggregate from IPD/OPD workforce data
-        const wardDataList: { name: string; prod: number }[] = [];
-        const wardProdMap: { [key: string]: { total: number; count: number } } = {};
-        
-        // Build ward productivity from IPD data
-        if (dept === 'IPD' && ipdWorkforceData) {
-            const filteredIPD = ipdWorkforceData.filter(row => {
-                if (!row.date) return false;
-                return normalizeDate(String(row.date)) === date;
-            });
-            
-            filteredIPD.forEach(row => {
-                const wardName = String(row.ward_name || '');
-                const prod = parseFloat(String(row.productivity)) || 0;
-                
-                if (wardName && prod > 0) {
-                    if (!wardProdMap[wardName]) {
-                        wardProdMap[wardName] = { total: 0, count: 0 };
-                    }
-                    wardProdMap[wardName].total += prod;
-                    wardProdMap[wardName].count++;
-                }
-            });
-        }
-        
-        // Build ward productivity from OPD data (using unit_name)
-        if (dept === 'OPD' && opdWorkforceData) {
-            const filteredOPD = opdWorkforceData.filter(row => {
-                if (!row.date) return false;
-                return normalizeDate(String(row.date)) === date;
-            });
-            
-            filteredOPD.forEach(row => {
-                const unitName = String(row.unit_name || row.ward_name || '');
-                const prod = parseFloat(String(row.productivity)) || 0;
-                
-                if (unitName && prod > 0) {
-                    if (!wardProdMap[unitName]) {
-                        wardProdMap[unitName] = { total: 0, count: 0 };
-                    }
-                    wardProdMap[unitName].total += prod;
-                    wardProdMap[unitName].count++;
-                }
-            });
-        }
-        
-        // Convert map to list with average productivity
-        Object.entries(wardProdMap).forEach(([name, data]) => {
-            const avgProd = data.count > 0 ? data.total / data.count : 0;
-            wardDataList.push({ name, prod: parseFloat(avgProd.toFixed(2)) });
-        });
-        
-        // Sort by productivity descending
-        wardDataList.sort((a, b) => b.prod - a.prod);
-        
-        console.log('Ward Performance Data:', wardDataList);
-
-        finalSummary.forEach(row => {
-            const prod = parseFloat(String(row.productivity)) || 0;
-            if (prod > 0) {
-                totalProd += prod;
-                countProd++;
-            }
-
-            totalWorkforce += parseInt(String(row.total_workforce)) || 0;
-            totalRN += parseInt(String(row.rn_count)) || 0;
-            totalPN += parseInt(String(String(row.pn_count))) || 0;
-            
-            if (dept === 'IPD') {
-                totalCMI += parseFloat(String(row.cmi)) || 0;
-                // Shifts are now calculated from ipdWorkforceData above
-                // But if ipdWorkforceData is missing, we might fallback to Summary columns if they exist
-                // midnightRN += parseInt(String(row.night_shift_nurses)) || 0; 
-                // We'll leave this empty to avoid double counting if we use the block above.
-                // Or we can use this as fallback?
-                // Let's rely on the block above for shifts.
-                // But we still need CMI from Summary.
-                totalCMI += parseFloat(String(row.cmi)) || 0;
-            } else {
-                totalPatientVisit += parseInt(String(row.patient_visit)) || 0;
-            }
-
-            // CAP
-            const cap = String(row.cap_status || '').toLowerCase(); // Assuming there's a cap_status column or calculated?
-            // Legacy used 'cap_suitable', 'cap_improve', 'cap_shortage' columns if available, OR calculated from 'cap_status' string.
-            // Let's check `normalizeHeaderName`. It maps `cap_suitable` etc.
-            // So we sum them up.
-            capSuitable += parseInt(String(row.cap_suitable)) || 0;
-            capImprove += parseInt(String(row.cap_improve)) || 0;
-            capShortage += parseInt(String(row.cap_shortage)) || 0;
-
-            // Ward Data
-            if (row.ward_name) {
-                wardDataList.push({
-                    name: String(row.ward_name),
-                    prod: prod
-                });
-            }
-        });
-
-        // Averages
-        const avgProd = countProd > 0 ? (totalProd / countProd) : 0;
-        const avgCMI = countProd > 0 ? (totalCMI / countProd) : 0;
-
-        // Skill Mix
-        const totalMix = totalRN + totalPN;
-        const rnRatio = totalMix > 0 ? ((totalRN / totalMix) * 100).toFixed(1) : '0';
-        const ratioDisplay = totalPN > 0 ? `1:${(totalRN/totalPN).toFixed(1)}` : '-';
-
-        // Update Result
-        result = {
-            deptType: dept,
-            productivity: parseFloat(avgProd.toFixed(2)),
-            totalWorkforce: totalWorkforce,
-            cmi: parseFloat(avgCMI.toFixed(2)),
-            patientVisit: totalPatientVisit,
-            shifts: {
-                morning: { rn: Math.floor(totalRN * 0.4), nonRn: Math.floor(totalPN * 0.4) }, // Mock distribution if data missing
-                afternoon: { rn: Math.floor(totalRN * 0.3), nonRn: Math.floor(totalPN * 0.3) },
-                midnight: { rn: midnightRN, nonRn: Math.floor(totalPN * 0.2) } // Use actual midnight if available
-            },
-            workforce: { rn: totalRN, nonRn: totalPN },
-            skillMix: {
-                total: totalMix,
-                onDuty: midnightRN, // Using midnight as proxy for "on duty" or similar
-                ratio: `1:${Math.round(totalPN/totalRN) || 1}` // Simplified ratio
-            },
-            capStatus: {
-                suitable: capSuitable,
-                improve: capImprove,
-                shortage: capShortage
-            },
-            wardData: wardDataList
-        };
-
-        setData(result);
-    };
+    const wardOptions = wards.map(w => ({ id: w.id, name: w.name }));
 
     return (
         <div className="p-4 md:p-6 min-h-screen">
             <LoadingOverlay isLoading={loading} />
-            <SettingsModal 
-                isOpen={settingsOpen} 
-                onClose={() => setSettingsOpen(false)} 
-                onConnect={connectAllSheets}
-                initialSettings={settings}
-            />
             
             <Header 
-                dept={dept} setDept={setDept}
+                dept={dept} setDept={(d) => { setDept(d); setWard('all'); }}
                 ward={ward} setWard={setWard}
                 date={date} setDate={setDate}
-                onRefresh={() => calculateDashboardData()}
-                onOpenSettings={() => setSettingsOpen(true)}
-                wards={dept === 'IPD' ? wardsIPD : wardsOPD}
+                onRefresh={fetchDashboard}
+                onOpenSettings={() => window.open('/settings', '_blank')}
+                wards={wardOptions}
             />
+
             
-            {/* Main Grid */}
+            {/* Main Grid with smooth transition */}
+            <div key={`${dept}-${ward}-${date}`} className="animate-fadeIn">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 {/* Left Column: KPIs & Workforce */}
                 <div className="lg:col-span-5 flex flex-col gap-6">
@@ -751,6 +285,7 @@ export default function Dashboard() {
                         </div>
                     </div>
                 </div>
+            </div>
             </div>
         </div>
     );

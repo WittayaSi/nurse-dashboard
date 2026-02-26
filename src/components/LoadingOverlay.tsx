@@ -5,7 +5,7 @@ interface LoadingOverlayProps {
     message?: string;
 }
 
-export default function LoadingOverlay({ isLoading, message = 'Connecting to Google Sheets' }: LoadingOverlayProps) {
+export default function LoadingOverlay({ isLoading, message = 'กรุณารอสักครู่...' }: LoadingOverlayProps) {
     if (!isLoading) return null;
 
     return (

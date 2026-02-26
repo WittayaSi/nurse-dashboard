@@ -9,7 +9,7 @@ interface HeaderProps {
     setDate: (date: string) => void;
     onRefresh: () => void;
     onOpenSettings: () => void;
-    wards: string[];
+    wards: { id: number; name: string }[];
 }
 
 export default function Header({ 
@@ -46,7 +46,7 @@ export default function Header({
                         </select>
                     </div>
 
-                    {/* Ward Selector */}
+                    {/* Ward Selector - ใช้ ID เป็น value */}
                     <div className="flex items-center bg-white rounded-xl px-4 py-2 border border-gray-200 shadow-sm">
                         <i className="fa-solid fa-hospital-user text-gray-400 mr-2"></i>
                         <label className="text-xs text-gray-500 mr-2">หน่วยงาน:</label>
@@ -57,21 +57,27 @@ export default function Header({
                         >
                             <option value="all">📊 ภาพรวม (All)</option>
                             {wards.map((w) => (
-                                <option key={w} value={w}>{w}</option>
+                                <option key={w.id} value={String(w.id)}>{w.name}</option>
                             ))}
                         </select>
                     </div>
 
-                    {/* Date Selector */}
+                    {/* Date Selector - dd/mm/yyyy format */}
                     <div className="flex items-center bg-white rounded-xl px-4 py-2 border border-gray-200 shadow-sm">
                         <i className="fa-regular fa-calendar text-gray-400 mr-2"></i>
                         <label className="text-xs text-gray-500 mr-2">วันที่:</label>
-                        <input 
-                            type="date" 
-                            value={date} 
-                            onChange={(e) => setDate(e.target.value)} 
-                            className="text-sm font-semibold text-gray-700 bg-transparent outline-none cursor-pointer"
-                        />
+                        <div className="relative">
+                            <input 
+                                type="date" 
+                                value={date} 
+                                onChange={(e) => setDate(e.target.value)} 
+                                onKeyDown={(e) => e.preventDefault()}
+                                className="text-sm font-semibold bg-transparent outline-none cursor-pointer text-transparent w-[130px]"
+                            />
+                            <div className="absolute inset-0 flex items-center pointer-events-none text-sm font-semibold text-gray-700">
+                                {date ? date.split('-').reverse().join('/') : ''}
+                            </div>
+                        </div>
                     </div>
 
                     {/* Settings Button */}

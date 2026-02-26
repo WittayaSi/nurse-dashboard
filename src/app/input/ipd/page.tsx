@@ -1,0 +1,585 @@
+'use client';
+
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+
+interface Ward {
+    id: number;
+    code: string;
+    name: string;
+    deptType: string;
+}
+
+interface ShiftData {
+    hnCount: number;
+    rnCount: number;
+    tnCount: number;
+    naCount: number;
+}
+
+interface SummaryData {
+    totalStaffDay: number;
+    patientDay: number;
+    hppd: number;
+    dischargeCount: number;
+    newAdmission: number;
+    productivity: number;
+    cmi: number;
+    capStatus: string;
+}
+
+interface ToastMessage {
+    id: number;
+    type: 'success' | 'error';
+    text: string;
+}
+
+const emptyShift = (): ShiftData => ({ hnCount: 0, rnCount: 0, tnCount: 0, naCount: 0 });
+const emptySummary = (): SummaryData => ({
+    totalStaffDay: 0, patientDay: 0, hppd: 0,
+    dischargeCount: 0, newAdmission: 0,
+    productivity: 0, cmi: 0, capStatus: 'suitable'
+});
+
+// --- Toast Component ---
+function Toast({ toasts, onDismiss }: { toasts: ToastMessage[]; onDismiss: (id: number) => void }) {
+    return (
+        <div className="fixed top-4 right-4 z-50 flex flex-col gap-2" aria-live="assertive" role="alert">
+            {toasts.map(t => (
+                <div key={t.id}
+                    className={`flex items-center gap-3 px-5 py-3 rounded-xl shadow-lg text-sm font-semibold animate-slide-in
+                        ${t.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}
+                >
+                    <i className={`fa-solid ${t.type === 'success' ? 'fa-circle-check' : 'fa-circle-exclamation'}`}></i>
+                    <span>{t.text}</span>
+                    <button onClick={() => onDismiss(t.id)} className="ml-2 opacity-70 hover:opacity-100"
+                        aria-label="ปิดการแจ้งเตือน">
+                        <i className="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            ))}
+            <style jsx>{`
+                @keyframes slide-in { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+                .animate-slide-in { animation: slide-in 0.3s ease-out; }
+            `}</style>
+        </div>
+    );
+}
+
+// --- Loading Skeleton ---
+function LoadingSkeleton() {
+    return (
+        <div className="animate-pulse space-y-6" role="status" aria-label="กำลังโหลดข้อมูล">
+            <div className="card-kpi p-0 overflow-hidden">
+                <div className="gradient-header px-5 py-3 text-white"><div className="h-5 bg-white/20 rounded w-40"></div></div>
+                <div className="p-4 space-y-3">
+                    {[1, 2, 3].map(i => <div key={i} className="h-12 bg-gray-200 rounded-lg"></div>)}
+                </div>
+            </div>
+            <div className="card-kpi p-0 overflow-hidden">
+                <div className="bg-gradient-to-r from-teal-600 to-emerald-500 px-5 py-3"><div className="h-5 bg-white/20 rounded w-32"></div></div>
+                <div className="p-5 grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map(i => <div key={i} className="h-14 bg-gray-200 rounded-xl"></div>)}
+                </div>
+            </div>
+            <span className="sr-only">กำลังโหลดข้อมูล...</span>
+        </div>
+    );
+}
+
+export default function IPDInputPage() {
+    const router = useRouter();
+    const [wards, setWards] = useState<Ward[]>([]);
+    const [selectedWard, setSelectedWard] = useState<number>(0);
+    const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
+    const [shifts, setShifts] = useState<{ morning: ShiftData; afternoon: ShiftData; night: ShiftData }>({
+        morning: emptyShift(), afternoon: emptyShift(), night: emptyShift()
+    });
+    const [summary, setSummary] = useState<SummaryData>(emptySummary());
+    const [saving, setSaving] = useState(false);
+    const [hasExistingData, setHasExistingData] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+    const [toasts, setToasts] = useState<ToastMessage[]>([]);
+    const [isDirty, setIsDirty] = useState(false);
+    const toastIdRef = useRef(0);
+
+    // Snapshot of saved data for dirty tracking
+    const savedDataRef = useRef<{ shifts: typeof shifts; summary: SummaryData } | null>(null);
+
+    const readonly = hasExistingData && !isEditing;
+
+    // --- Toast helpers ---
+    const showToast = useCallback((type: 'success' | 'error', text: string) => {
+        const id = ++toastIdRef.current;
+        setToasts(prev => [...prev, { id, type, text }]);
+        setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
+    }, []);
+
+    const dismissToast = useCallback((id: number) => {
+        setToasts(prev => prev.filter(t => t.id !== id));
+    }, []);
+
+    // --- Unsaved changes warning (beforeunload) ---
+    useEffect(() => {
+        const handler = (e: BeforeUnloadEvent) => {
+            if (isDirty) { e.preventDefault(); }
+        };
+        window.addEventListener('beforeunload', handler);
+        return () => window.removeEventListener('beforeunload', handler);
+    }, [isDirty]);
+
+    // --- Dirty tracking ---
+    useEffect(() => {
+        if (!savedDataRef.current || readonly) { setIsDirty(false); return; }
+        const saved = savedDataRef.current;
+        const shiftsChanged = JSON.stringify(shifts) !== JSON.stringify(saved.shifts);
+        const summaryChanged = JSON.stringify(summary) !== JSON.stringify(saved.summary);
+        setIsDirty(shiftsChanged || summaryChanged);
+    }, [shifts, summary, readonly]);
+
+    useEffect(() => {
+        fetch('/api/wards?deptType=IPD')
+            .then(res => res.json())
+            .then(data => {
+                setWards(data);
+                if (data.length > 0) setSelectedWard(data[0].id);
+            })
+            .catch(err => console.error('Error loading wards:', err));
+    }, []);
+
+    useEffect(() => {
+        if (!selectedWard || !date) return;
+        loadExistingData();
+    }, [selectedWard, date]);
+
+    const loadExistingData = async () => {
+        setLoading(true);
+        try {
+            const shiftsRes = await fetch(`/api/ipd/shifts?date=${date}&wardId=${selectedWard}`);
+            const shiftsData = await shiftsRes.json();
+
+            const newShifts = { morning: emptyShift(), afternoon: emptyShift(), night: emptyShift() };
+            shiftsData.forEach((s: any) => {
+                const key = s.shift as keyof typeof newShifts;
+                if (newShifts[key]) {
+                    newShifts[key] = {
+                        hnCount: s.hnCount ?? 0,
+                        rnCount: s.rnCount ?? 0,
+                        tnCount: s.tnCount ?? 0,
+                        naCount: s.naCount ?? 0,
+                    };
+                }
+            });
+            setShifts(newShifts);
+            setHasExistingData(shiftsData.length > 0);
+            setIsEditing(false);
+
+            const summaryRes = await fetch(`/api/ipd/summary?date=${date}&wardId=${selectedWard}`);
+            const summaryData = await summaryRes.json();
+            let loadedSummary: SummaryData;
+            if (summaryData.length > 0) {
+                const s = summaryData[0];
+                loadedSummary = {
+                    totalStaffDay: s.totalStaffDay ?? 0,
+                    patientDay: s.patientDay ?? 0,
+                    hppd: parseFloat(s.hppd) || 0,
+                    dischargeCount: s.dischargeCount ?? 0,
+                    newAdmission: s.newAdmission ?? 0,
+                    productivity: parseFloat(s.productivity) || 0,
+                    cmi: parseFloat(s.cmi) || 0,
+                    capStatus: s.capStatus ?? 'suitable',
+                };
+                if (s.updatedAt) {
+                    setLastSavedAt(new Date(s.updatedAt).toLocaleString('th-TH', {
+                        day: '2-digit', month: '2-digit', year: 'numeric',
+                        hour: '2-digit', minute: '2-digit'
+                    }));
+                } else {
+                    setLastSavedAt(null);
+                }
+            } else {
+                loadedSummary = emptySummary();
+                setLastSavedAt(null);
+            }
+            setSummary(loadedSummary);
+            savedDataRef.current = { shifts: newShifts, summary: loadedSummary };
+            setIsDirty(false);
+        } catch (err) {
+            console.error('Error loading existing data:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleShiftChange = (shift: 'morning' | 'afternoon' | 'night', field: keyof ShiftData, value: string) => {
+        if (readonly) return;
+        setShifts(prev => ({
+            ...prev,
+            [shift]: { ...prev[shift], [field]: parseInt(value) || 0 }
+        }));
+    };
+
+    const handleSummaryChange = (field: keyof SummaryData, value: string) => {
+        if (readonly) return;
+        setSummary(prev => ({
+            ...prev,
+            [field]: field === 'capStatus' ? value : (parseFloat(value) || 0)
+        }));
+    };
+
+    // Auto calculate total staff
+    const totalStaff = (s: ShiftData) => s.hnCount + s.rnCount + s.tnCount + s.naCount;
+    const totalAllShifts = totalStaff(shifts.morning) + totalStaff(shifts.afternoon) + totalStaff(shifts.night);
+
+    // Auto calculate HPPD
+    const shiftHours = 7;
+    const calcHppd = summary.patientDay > 0
+        ? parseFloat(((totalAllShifts * shiftHours) / summary.patientDay).toFixed(2))
+        : 0;
+
+    // Auto calculate Productivity
+    const standardHppd = 6.0;
+    const calcProductivity = totalAllShifts > 0
+        ? parseFloat(((summary.patientDay * standardHppd) / (totalAllShifts * shiftHours) * 100).toFixed(2))
+        : 0;
+
+    const handleSave = async () => {
+        // Validation
+        if (!selectedWard) { showToast('error', 'กรุณาเลือกหอผู้ป่วย'); return; }
+        if (!date) { showToast('error', 'กรุณาเลือกวันที่'); return; }
+
+        const shiftNames = { morning: 'เช้า', afternoon: 'บ่าย', night: 'ดึก' };
+        for (const [key, label] of Object.entries(shiftNames)) {
+            const s = shifts[key as keyof typeof shifts];
+            if (s.hnCount + s.rnCount + s.tnCount + s.naCount === 0) {
+                showToast('error', `เวร${label}: กรุณากรอกจำนวนบุคลากรอย่างน้อย 1 คน`);
+                return;
+            }
+        }
+
+        if (!summary.patientDay || summary.patientDay <= 0) {
+            showToast('error', 'กรุณากรอก Patient Day (ต้องมากกว่า 0)');
+            return;
+        }
+
+        // Confirmation dialog for update mode
+        if (isEditing) {
+            const wardName = wards.find(w => w.id === selectedWard)?.name || '';
+            const confirmed = window.confirm(
+                `ยืนยันการอัพเดทข้อมูล?\n\nหอผู้ป่วย: ${wardName}\nวันที่: ${date.split('-').reverse().join('/')}\n\nข้อมูลเดิมจะถูกเขียนทับ`
+            );
+            if (!confirmed) return;
+        }
+
+        setSaving(true);
+        try {
+            const shiftPayload = ['morning', 'afternoon', 'night'].map(shift => ({
+                wardId: selectedWard,
+                recordDate: date,
+                shift,
+                ...shifts[shift as keyof typeof shifts],
+            }));
+
+            const summaryPayload = {
+                wardId: selectedWard,
+                recordDate: date,
+                ...summary,
+                totalStaffDay: totalAllShifts,
+                hppd: calcHppd,
+                productivity: calcProductivity,
+            };
+
+            const response = await fetch('/api/ipd/save-all', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ shifts: shiftPayload, summary: summaryPayload }),
+            });
+
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || 'Failed to save data');
+            }
+
+            showToast('success', 'บันทึกข้อมูลสำเร็จ!');
+            setIsDirty(false);
+            await loadExistingData();
+        } catch (err: any) {
+            showToast('error', err.message);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const shiftLabels = [
+        { key: 'morning' as const, label: '☀️ เช้า', bg: 'bg-amber-50', border: 'border-amber-200' },
+        { key: 'afternoon' as const, label: '🌤️ บ่าย', bg: 'bg-blue-50', border: 'border-blue-200' },
+        { key: 'night' as const, label: '🌙 ดึก', bg: 'bg-indigo-50', border: 'border-indigo-200' },
+    ];
+
+    const fieldLabels: Record<string, string> = { hnCount: 'HN', rnCount: 'RN', tnCount: 'TN', naCount: 'NA' };
+    const shiftThaiLabels: Record<string, string> = { morning: 'เช้า', afternoon: 'บ่าย', night: 'ดึก' };
+
+    return (
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-4 md:p-6">
+            {/* Toast Notifications */}
+            <Toast toasts={toasts} onDismiss={dismissToast} />
+
+            {/* Header */}
+            <header className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                    <button onClick={() => router.back()} className="text-gray-400 hover:text-indigo-600 transition-colors"
+                        aria-label="ย้อนกลับ">
+                        <i className="fa-solid fa-arrow-left text-lg"></i>
+                    </button>
+                    <div className="gradient-header p-3 rounded-xl shadow-lg text-white" aria-hidden="true">
+                        <i className="fa-solid fa-bed text-xl"></i>
+                    </div>
+                    <div>
+                        <h1 className="text-xl font-bold text-gray-800">บันทึกข้อมูล IPD</h1>
+                        <p className="text-xs text-gray-500">กรอกข้อมูลกำลังคนผู้ป่วยใน</p>
+                    </div>
+                </div>
+                <Link href="/input/opd" className="text-sm text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1"
+                    aria-label="ไปหน้า OPD">
+                    <span>OPD</span> <i className="fa-solid fa-arrow-right"></i>
+                </Link>
+            </header>
+
+            {/* Filters */}
+            <div className="glass-panel p-4 mb-6 flex flex-wrap gap-4 items-end" role="search" aria-label="ตัวกรองข้อมูล">
+                <div className="flex-1 min-w-[200px]">
+                    <label htmlFor="ipd-ward-select" className="text-xs font-bold text-gray-600 mb-1 block">🏥 หอผู้ป่วย</label>
+                    <select
+                        id="ipd-ward-select"
+                        value={selectedWard}
+                        onChange={(e) => setSelectedWard(parseInt(e.target.value))}
+                        className="w-full px-3 py-2.5 bg-white border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:outline-none text-sm font-semibold"
+                        aria-label="เลือกหอผู้ป่วย"
+                    >
+                        {wards.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                    </select>
+                </div>
+                <div className="min-w-[180px]">
+                    <label htmlFor="ipd-date-input" className="text-xs font-bold text-gray-600 mb-1 block">📅 วันที่</label>
+                    <div className="relative">
+                        <input
+                            id="ipd-date-input"
+                            type="date"
+                            value={date}
+                            onChange={(e) => setDate(e.target.value)}
+                            onKeyDown={(e) => e.preventDefault()}
+                            className="w-full px-3 py-2.5 bg-white border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:outline-none text-sm font-semibold text-transparent cursor-pointer"
+                            aria-label="เลือกวันที่"
+                        />
+                        <div className="absolute inset-0 flex items-center px-3 pointer-events-none text-sm font-semibold text-gray-800" aria-hidden="true">
+                            {date ? date.split('-').reverse().join('/') : ''}
+                        </div>
+                    </div>
+                    {date && (
+                        <p className="text-[11px] text-indigo-600 font-semibold mt-1">
+                            {new Date(date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}
+                        </p>
+                    )}
+                </div>
+            </div>
+
+            {/* Loading Skeleton or Content */}
+            {loading ? <LoadingSkeleton /> : (
+                <>
+                    {/* Shift Data Table */}
+                    <section className="card-kpi p-0 mb-6 overflow-hidden" aria-label="ข้อมูลกำลังคนรายเวร">
+                        <div className="gradient-header px-5 py-3 text-white flex items-center gap-2">
+                            <i className="fa-solid fa-clock" aria-hidden="true"></i>
+                            <span className="font-bold">ข้อมูลกำลังคนรายเวร</span>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm" aria-label="ตารางกำลังคนรายเวร">
+                                <thead className="bg-gray-50 text-gray-600">
+                                    <tr>
+                                        <th scope="col" className="px-4 py-3 text-left font-bold">เวร</th>
+                                        <th scope="col" className="px-4 py-3 text-center font-bold">HN</th>
+                                        <th scope="col" className="px-4 py-3 text-center font-bold">RN</th>
+                                        <th scope="col" className="px-4 py-3 text-center font-bold">TN</th>
+                                        <th scope="col" className="px-4 py-3 text-center font-bold">NA</th>
+                                        <th scope="col" className="px-4 py-3 text-center font-bold bg-gray-100">รวม</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {shiftLabels.map(({ key, label, bg }) => (
+                                        <tr key={key} className={`${bg} hover:brightness-95 transition-colors`}>
+                                            <td className="px-4 py-3 font-bold text-gray-700">{label}</td>
+                                            {(['hnCount', 'rnCount', 'tnCount', 'naCount'] as const).map(field => (
+                                                <td key={field} className="px-2 py-2 text-center">
+                                                    <input
+                                                        id={`ipd-${key}-${field}`}
+                                                        type="number"
+                                                        min="0"
+                                                        inputMode="numeric"
+                                                        value={shifts[key][field] || ''}
+                                                        onChange={(e) => handleShiftChange(key, field, e.target.value)}
+                                                        disabled={readonly}
+                                                        aria-label={`${fieldLabels[field]} เวร${shiftThaiLabels[key]}`}
+                                                        className={`w-20 px-2 py-2.5 text-center border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300 font-bold transition-colors ${readonly ? 'bg-gray-100 border-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white border-gray-200 focus:border-indigo-400 text-gray-700'}`}
+                                                    />
+                                                </td>
+                                            ))}
+                                            <td className="px-4 py-3 text-center font-bold text-indigo-700 bg-indigo-50/50"
+                                                aria-live="polite" aria-label={`รวมเวร${shiftThaiLabels[key]}`}>
+                                                {totalStaff(shifts[key])}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    <tr className="bg-gray-50 font-bold">
+                                        <td className="px-4 py-3 text-gray-800">📊 รวมทั้งวัน</td>
+                                        <td className="px-4 py-3 text-center">{shifts.morning.hnCount + shifts.afternoon.hnCount + shifts.night.hnCount}</td>
+                                        <td className="px-4 py-3 text-center text-pink-600">{shifts.morning.rnCount + shifts.afternoon.rnCount + shifts.night.rnCount}</td>
+                                        <td className="px-4 py-3 text-center">{shifts.morning.tnCount + shifts.afternoon.tnCount + shifts.night.tnCount}</td>
+                                        <td className="px-4 py-3 text-center text-amber-600">{shifts.morning.naCount + shifts.afternoon.naCount + shifts.night.naCount}</td>
+                                        <td className="px-4 py-3 text-center text-indigo-700 bg-indigo-100 text-lg"
+                                            aria-live="polite" aria-label="รวมบุคลากรทั้งวัน">
+                                            {totalAllShifts}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    {/* Summary Data */}
+                    <section className="card-kpi p-0 mb-6 overflow-hidden" aria-label="สรุปรายวัน">
+                        <div className="bg-gradient-to-r from-teal-600 to-emerald-500 px-5 py-3 text-white flex items-center gap-2">
+                            <i className="fa-solid fa-clipboard-list" aria-hidden="true"></i>
+                            <span className="font-bold">สรุปรายวัน</span>
+                        </div>
+                        <div className="p-5 grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div>
+                                <label htmlFor="ipd-patient-day" className="text-xs font-bold text-gray-500 mb-1 block">Pt/Day (ผู้ป่วย)</label>
+                                <input id="ipd-patient-day" type="number" min="0" inputMode="numeric"
+                                    value={summary.patientDay || ''}
+                                    onChange={(e) => handleSummaryChange('patientDay', e.target.value)}
+                                    disabled={readonly}
+                                    aria-label="จำนวนผู้ป่วยต่อวัน"
+                                    className={`w-full px-3 py-2.5 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 text-sm font-bold transition-colors ${readonly ? 'bg-gray-100 border-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white border-gray-200 focus:border-teal-500 text-gray-700'}`}
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-teal-600 mb-1 block">📐 HPPD <span className="text-gray-400">(คำนวณอัตโนมัติ)</span></label>
+                                <div className="w-full px-3 py-2.5 bg-teal-50 border-2 border-teal-200 rounded-xl text-sm font-bold text-teal-700"
+                                    role="status" aria-live="polite" aria-label={`HPPD: ${calcHppd || 'ยังไม่มีข้อมูล'}`}>
+                                    {calcHppd || '-'}
+                                    <span className="text-[10px] text-gray-400 ml-1">= (Staff×7) / Pt</span>
+                                </div>
+                            </div>
+                            <div>
+                                <label htmlFor="ipd-discharge" className="text-xs font-bold text-gray-500 mb-1 block">ยอด D/C</label>
+                                <input id="ipd-discharge" type="number" min="0" inputMode="numeric"
+                                    value={summary.dischargeCount || ''}
+                                    onChange={(e) => handleSummaryChange('dischargeCount', e.target.value)}
+                                    disabled={readonly}
+                                    aria-label="จำนวน Discharge"
+                                    className={`w-full px-3 py-2.5 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 text-sm font-bold transition-colors ${readonly ? 'bg-gray-100 border-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white border-gray-200 focus:border-teal-500 text-gray-700'}`}
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="ipd-new-admission" className="text-xs font-bold text-gray-500 mb-1 block">รับใหม่</label>
+                                <input id="ipd-new-admission" type="number" min="0" inputMode="numeric"
+                                    value={summary.newAdmission || ''}
+                                    onChange={(e) => handleSummaryChange('newAdmission', e.target.value)}
+                                    disabled={readonly}
+                                    aria-label="จำนวนรับใหม่"
+                                    className={`w-full px-3 py-2.5 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 text-sm font-bold transition-colors ${readonly ? 'bg-gray-100 border-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white border-gray-200 focus:border-teal-500 text-gray-700'}`}
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-purple-600 mb-1 block">📊 Productivity <span className="text-gray-400">(คำนวณอัตโนมัติ)</span></label>
+                                <div role="status" aria-live="polite"
+                                    aria-label={`Productivity: ${calcProductivity ? calcProductivity + '%' : 'ยังไม่มีข้อมูล'}`}
+                                    className={`w-full px-3 py-2.5 border-2 rounded-xl text-sm font-bold ${calcProductivity >= 85 ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : calcProductivity > 0 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-gray-50 border-gray-200 text-gray-500'}`}>
+                                    {calcProductivity ? `${calcProductivity}%` : '-'}
+                                </div>
+                            </div>
+                            <div>
+                                <label htmlFor="ipd-cmi" className="text-xs font-bold text-gray-500 mb-1 block">CMI</label>
+                                <input id="ipd-cmi" type="number" step="0.01" min="0" inputMode="decimal"
+                                    value={summary.cmi || ''}
+                                    onChange={(e) => handleSummaryChange('cmi', e.target.value)}
+                                    disabled={readonly}
+                                    aria-label="ค่า CMI"
+                                    className={`w-full px-3 py-2.5 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 text-sm font-bold transition-colors ${readonly ? 'bg-gray-100 border-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white border-gray-200 focus:border-teal-500 text-gray-700'}`}
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="ipd-cap-status" className="text-xs font-bold text-gray-500 mb-1 block">CAP Assessment</label>
+                                <select id="ipd-cap-status" value={summary.capStatus}
+                                    onChange={(e) => handleSummaryChange('capStatus', e.target.value)}
+                                    disabled={readonly}
+                                    aria-label="ระดับ CAP Assessment"
+                                    className={`w-full px-3 py-2.5 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 text-sm font-bold transition-colors ${readonly ? 'bg-gray-100 border-gray-100 text-gray-500 cursor-not-allowed appearance-none' : 'bg-white border-gray-200 focus:border-teal-500 text-gray-700'}`}
+                                >
+                                    <option value="suitable">🟢 เหมาะสม</option>
+                                    <option value="improve">🟡 ปรับปรุง</option>
+                                    <option value="shortage">🔴 ขาดแคลน</option>
+                                </select>
+                            </div>
+                            <div className="flex items-end">
+                                <div className="bg-indigo-50 rounded-xl px-4 py-2.5 w-full text-center"
+                                    role="status" aria-live="polite" aria-label={`รวม Staff ต่อวัน: ${totalAllShifts}`}>
+                                    <span className="text-xs text-gray-500">รวม Staff/วัน</span>
+                                    <div className="text-2xl font-bold text-indigo-700">{totalAllShifts}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Status Bar & Actions */}
+                    {hasExistingData && !isEditing && (
+                        <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-xl px-5 py-3 mb-4"
+                            role="status">
+                            <div className="flex items-center gap-2 text-amber-700 text-sm font-semibold">
+                                <i className="fa-solid fa-circle-info" aria-hidden="true"></i>
+                                <span>มีข้อมูลของวันนี้อยู่แล้ว (โหมดดูอย่างเดียว)</span>
+                                {lastSavedAt && (
+                                    <span className="text-xs text-gray-500 ml-2">· บันทึกล่าสุด: {lastSavedAt}</span>
+                                )}
+                            </div>
+                            <button
+                                onClick={() => setIsEditing(true)}
+                                className="bg-amber-500 hover:bg-amber-600 text-white px-5 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 transition-colors"
+                                aria-label="เข้าสู่โหมดแก้ไขข้อมูล"
+                            >
+                                <i className="fa-solid fa-pen" aria-hidden="true"></i> แก้ไขข้อมูล
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Save Button + Unsaved indicator */}
+                    <div className="flex items-center gap-4 justify-end">
+                        {isDirty && (
+                            <span className="text-xs text-amber-600 font-semibold flex items-center gap-1" role="status">
+                                <i className="fa-solid fa-circle text-[6px]" aria-hidden="true"></i>
+                                มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก
+                            </span>
+                        )}
+                        {lastSavedAt && isEditing && (
+                            <span className="text-xs text-gray-400">บันทึกล่าสุด: {lastSavedAt}</span>
+                        )}
+                        {(!hasExistingData || isEditing) && (
+                            <button
+                                onClick={handleSave}
+                                disabled={saving}
+                                className="gradient-header text-white px-8 py-3 rounded-xl font-bold shadow-lg hover:shadow-xl hover:opacity-95 transition-all flex items-center gap-2 active:scale-95 disabled:opacity-70"
+                                aria-label={saving ? 'กำลังบันทึกข้อมูล' : (isEditing ? 'อัพเดทข้อมูล' : 'บันทึกข้อมูล')}
+                            >
+                                {saving ? <i className="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> : <i className="fa-solid fa-floppy-disk" aria-hidden="true"></i>}
+                                {saving ? 'กำลังบันทึก...' : (isEditing ? 'อัพเดทข้อมูล' : 'บันทึกข้อมูล')}
+                            </button>
+                        )}
+                    </div>
+                </>
+            )}
+        </div>
+    );
+}
