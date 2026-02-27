@@ -45,6 +45,26 @@ export default function SettingsPage() {
             disabled: opdCount === 0,
             badge: opdCount === 0 ? 'ยังไม่มี Ward OPD — กรุณาตั้งค่าหน่วยงานก่อน' : null,
         },
+        {
+            href: '/export/ipd',
+            icon: 'fa-solid fa-file-excel',
+            title: 'Export ข้อมูล IPD',
+            desc: 'ดาวน์โหลดรายงานกำลังคน IPD เป็นไฟล์ Excel',
+            gradient: 'from-emerald-600 to-teal-500',
+            bg: 'bg-emerald-50',
+            disabled: ipdCount === 0,
+            badge: ipdCount === 0 ? 'ยังไม่มี Ward IPD — ไม่สามารถ Export ได้' : null,
+        },
+        {
+            href: '/export/opd',
+            icon: 'fa-solid fa-file-arrow-down',
+            title: 'Export ข้อมูล OPD',
+            desc: 'ดาวน์โหลดรายงานกำลังคน OPD เป็นไฟล์ Excel',
+            gradient: 'from-fuchsia-600 to-pink-500',
+            bg: 'bg-fuchsia-50',
+            disabled: opdCount === 0,
+            badge: opdCount === 0 ? 'ยังไม่มี Ward OPD — ไม่สามารถ Export ได้' : null,
+        },
     ];
 
     return (
@@ -53,8 +73,8 @@ export default function SettingsPage() {
                 <Link href="/" className="text-gray-400 hover:text-indigo-600 transition-colors">
                     <i className="fa-solid fa-arrow-left text-lg"></i>
                 </Link>
-                <div className="bg-gradient-to-r from-gray-700 to-gray-900 p-3 rounded-xl shadow-lg text-white">
-                    <i className="fa-solid fa-sliders text-xl"></i>
+                <div className="bg-gradient-to-r from-gray-700 to-gray-900 w-12 h-12 flex justify-center items-center rounded-xl shadow-lg text-white">
+                    <i className="fa-solid fa-sliders text-2xl"></i>
                 </div>
                 <div>
                     <h1 className="text-xl font-bold text-gray-800">ตั้งค่า & จัดการข้อมูล</h1>
@@ -67,7 +87,7 @@ export default function SettingsPage() {
                     <i className="fa-solid fa-spinner fa-spin text-2xl"></i>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                     {menuItems.map(item => {
                         const content = (
                             <div className={`${item.bg} rounded-2xl p-6 border border-gray-100 shadow-sm transition-all group relative
@@ -79,8 +99,8 @@ export default function SettingsPage() {
                                 <h3 className="font-bold text-gray-800 mb-1">{item.title}</h3>
                                 <p className="text-xs text-gray-500">{item.desc}</p>
                                 {item.badge && (
-                                    <div className="mt-3 text-[11px] font-semibold text-red-600 bg-red-50 border border-red-200 px-3 py-1.5 rounded-lg flex items-center gap-1">
-                                        <i className="fa-solid fa-triangle-exclamation"></i> {item.badge}
+                                    <div className="mt-4 text-[11px] font-semibold text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg flex items-start gap-1.5 leading-tight">
+                                        <i className="fa-solid fa-triangle-exclamation mt-0.5"></i> {item.badge}
                                     </div>
                                 )}
                                 {!item.disabled && (

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 interface Ward {
     id: number;
@@ -13,6 +14,7 @@ interface Ward {
 type DateMode = 'range' | 'month';
 
 export default function ExportOPDPage() {
+    const router = useRouter();
     const [dateMode, setDateMode] = useState<DateMode>('range');
     const [dateFrom, setDateFrom] = useState<string>(new Date().toISOString().split('T')[0]);
     const [dateTo, setDateTo] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -112,9 +114,10 @@ export default function ExportOPDPage() {
             {/* Header */}
             <header className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-3">
-                    <Link href="/" className="text-gray-400 hover:text-rose-600 transition-colors">
+                    <button onClick={() => router.back()} className="text-gray-400 hover:text-indigo-600 transition-colors"
+                        aria-label="ย้อนกลับ">
                         <i className="fa-solid fa-arrow-left text-lg"></i>
-                    </Link>
+                    </button>
                     <div className="bg-gradient-to-r from-rose-600 to-orange-500 p-3 rounded-xl shadow-lg text-white">
                         <i className="fa-solid fa-file-excel text-2xl"></i>
                     </div>
@@ -206,25 +209,31 @@ export default function ExportOPDPage() {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="text-xs font-bold text-gray-600 mb-1 block">จากวันที่</label>
-                                    <div className="relative">
+                                    <div className="relative group flex items-center bg-white border-2 border-gray-200 rounded-xl hover:border-emerald-500 transition-colors focus-within:border-emerald-500 h-[46px] cursor-pointer">
+                                        {/* The actual native input is the single source of truth for clicks */}
                                         <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
                                             onKeyDown={(e) => e.preventDefault()}
-                                            className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:border-emerald-500 focus:outline-none text-sm font-semibold text-transparent cursor-pointer"
+                                            className="w-full h-full bg-transparent px-4 py-3 outline-none cursor-pointer date-input-full-picker text-transparent"
                                         />
-                                        <div className="absolute inset-0 flex items-center px-4 pointer-events-none text-sm font-semibold text-gray-800">
-                                            {dateFrom ? dateFrom.split('-').reverse().join('/') : ''}
+                                        {/* The visual overlay sits on top but is completely transparent to clicks */}
+                                        <div className="absolute inset-0 flex justify-between items-center px-4 text-sm font-semibold text-gray-800 pointer-events-none">
+                                            <span>{dateFrom ? dateFrom.split('-').reverse().join('/') : ''}</span>
+                                            <i className="fa-regular fa-calendar-days text-gray-400 group-hover:text-emerald-500 transition-colors"></i>
                                         </div>
                                     </div>
                                 </div>
                                 <div>
                                     <label className="text-xs font-bold text-gray-600 mb-1 block">ถึงวันที่</label>
-                                    <div className="relative">
+                                    <div className="relative group flex items-center bg-white border-2 border-gray-200 rounded-xl hover:border-emerald-500 transition-colors focus-within:border-emerald-500 h-[46px] cursor-pointer">
+                                        {/* The actual native input is the single source of truth for clicks */}
                                         <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
                                             onKeyDown={(e) => e.preventDefault()}
-                                            className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:border-emerald-500 focus:outline-none text-sm font-semibold text-transparent cursor-pointer"
+                                            className="w-full h-full bg-transparent px-4 py-3 outline-none cursor-pointer date-input-full-picker text-transparent"
                                         />
-                                        <div className="absolute inset-0 flex items-center px-4 pointer-events-none text-sm font-semibold text-gray-800">
-                                            {dateTo ? dateTo.split('-').reverse().join('/') : ''}
+                                        {/* The visual overlay sits on top but is completely transparent to clicks */}
+                                        <div className="absolute inset-0 flex justify-between items-center px-4 text-sm font-semibold text-gray-800 pointer-events-none">
+                                            <span>{dateTo ? dateTo.split('-').reverse().join('/') : ''}</span>
+                                            <i className="fa-regular fa-calendar-days text-gray-400 group-hover:text-emerald-500 transition-colors"></i>
                                         </div>
                                     </div>
                                 </div>

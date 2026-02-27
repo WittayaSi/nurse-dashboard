@@ -10,6 +10,7 @@ interface Ward {
     deptType: string;
     isActive: boolean;
     opdFieldsConfig: OpdFieldsConfig | null;
+    hisWardKeys?: number[] | null;
 }
 
 interface FieldConfig {
@@ -43,6 +44,11 @@ export default function WardSettingsPage() {
     const [editId, setEditId] = useState<number | null>(null);
     const [editName, setEditName] = useState('');
 
+    // HIS Wards for mapping
+    const [hisWards, setHisWards] = useState<{ ward_key: number; source_ward_id: string; ward_name: string }[]>([]);
+    const [mapWardId, setMapWardId] = useState<number | null>(null);
+    const [mapHisKeys, setMapHisKeys] = useState<number[]>([]);
+
     // Workload config editor
     const [configWardId, setConfigWardId] = useState<number | null>(null);
     const [configGroups, setConfigGroups] = useState<FieldGroup[]>([]);
@@ -62,7 +68,16 @@ export default function WardSettingsPage() {
         }
     };
 
-    useEffect(() => { loadWards(); }, []);
+    const loadHisWards = async () => {
+        try {
+            const res = await fetch('/api/his/wards');
+            if (res.ok) setHisWards(await res.json());
+        } catch (err) {
+            console.error('Error loading HIS wards:', err);
+        }
+    };
+
+    useEffect(() => { loadWards(); loadHisWards(); }, []);
 
     // Auto-gen code: IPD-01, IPD-02, ... / OPD-01, OPD-02, ...
     const generateCode = (dept: 'IPD' | 'OPD') => {
@@ -114,6 +129,26 @@ export default function WardSettingsPage() {
             if (!res.ok) throw new Error('Failed to update');
             setEditId(null);
             setMessage({ type: 'success', text: '✅ อัพเดทสำเร็จ!' });
+            await loadWards();
+        } catch (err: any) {
+            setMessage({ type: 'error', text: `❌ ${err.message}` });
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleSaveMapping = async () => {
+        if (!mapWardId) return;
+        setSaving(true);
+        try {
+            const res = await fetch(`/api/wards/${mapWardId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ hisWardKeys: mapHisKeys.length > 0 ? mapHisKeys : null }),
+            });
+            if (!res.ok) throw new Error('Failed to update mapping');
+            setMapWardId(null);
+            setMessage({ type: 'success', text: '✅ อัพเดทการผูก HIS สำเร็จ!' });
             await loadWards();
         } catch (err: any) {
             setMessage({ type: 'error', text: `❌ ${err.message}` });
@@ -262,10 +297,11 @@ export default function WardSettingsPage() {
     const WardRow = ({ w }: { w: Ward }) => (
         <div className="card-kpi p-4 flex items-center justify-between">
             {editId === w.id ? (
-                <div className="flex-1 flex gap-2 items-center">
+                <div className="flex-1 flex gap-2 items-center flex-wrap">
                     <span className="text-xs font-mono bg-gray-100 text-gray-400 px-2 py-1 rounded">{w.code}</span>
                     <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)}
-                        className="flex-1 px-3 py-1.5 border-2 border-indigo-300 rounded-lg text-sm font-semibold focus:outline-none"
+                        placeholder="ชื่อหน่วยงาน"
+                        className="flex-1 min-w-[150px] px-3 py-1.5 border-2 border-indigo-300 rounded-lg text-sm font-semibold focus:outline-none"
                         autoFocus onKeyDown={(e) => e.key === 'Enter' && handleUpdate(w.id)}
                     />
                     <button onClick={() => handleUpdate(w.id)} disabled={saving}
@@ -282,6 +318,12 @@ export default function WardSettingsPage() {
                     <div className="flex items-center gap-3">
                         <span className="text-xs font-mono bg-gray-100 text-gray-500 px-2 py-1 rounded">{w.code}</span>
                         <span className="font-bold text-gray-800">{w.name}</span>
+                        {w.deptType === 'IPD' && (
+                            <span className="text-xs font-mono text-gray-400 bg-gray-50 px-2 py-1 rounded border border-gray-100" title="HIS Ward Keys">
+                                <i className="fa-solid fa-link mr-1"></i>
+                                {w.hisWardKeys?.length ? `[${w.hisWardKeys.join(', ')}]` : 'ไม่ได้ผูก'}
+                            </span>
+                        )}
                         {w.deptType === 'OPD' && w.opdFieldsConfig && (
                             <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold">
                                 ✓ ตั้งค่าแล้ว
@@ -289,6 +331,12 @@ export default function WardSettingsPage() {
                         )}
                     </div>
                     <div className="flex items-center gap-2">
+                        {w.deptType === 'IPD' && (
+                            <button onClick={() => { setMapWardId(w.id); setMapHisKeys(w.hisWardKeys || []); }}
+                                className="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors flex items-center gap-1">
+                                <i className="fa-solid fa-link"></i> ผูกตึก HIS
+                            </button>
+                        )}
                         {w.deptType === 'OPD' && (
                             <button onClick={() => openConfigEditor(w)}
                                 className="px-3 py-1.5 bg-teal-50 text-teal-600 rounded-lg text-xs font-bold hover:bg-teal-100 transition-colors flex items-center gap-1">
@@ -384,6 +432,64 @@ export default function WardSettingsPage() {
                                     เพิ่ม
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Mapping Config Editor Modal */}
+            {mapWardId !== null && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-8 overflow-y-auto">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+                        <div className="bg-gradient-to-r from-blue-600 to-indigo-500 p-4 flex items-center justify-between text-white">
+                            <div>
+                                <h3 className="font-bold text-lg flex items-center gap-2">
+                                    <i className="fa-solid fa-link"></i> ผูกตึก HIS Dashboard
+                                </h3>
+                                <p className="text-sm opacity-90">{wards.find(w => w.id === mapWardId)?.name}</p>
+                            </div>
+                            <button onClick={() => setMapWardId(null)} className="hover:bg-white/20 rounded-lg w-8 h-8 flex items-center justify-center transition-colors">
+                                <i className="fa-solid fa-times"></i>
+                            </button>
+                        </div>
+                        <div className="p-5 max-h-[60vh] overflow-y-auto">
+                            <p className="text-xs text-gray-500 mb-4 font-bold border-b pb-2">
+                                เลือกตึกจาก Data Warehouse ที่ต้องการนำยอดมารวมในหอผู้ป่วยนี้
+                            </p>
+                            <div className="flex flex-col gap-2">
+                                {hisWards.map(hw => (
+                                    <label key={hw.ward_key} className="flex items-center gap-3 p-3 border-2 border-gray-100 rounded-xl cursor-pointer hover:border-blue-200 hover:bg-blue-50 transition-all select-none group">
+                                        <input
+                                            type="checkbox"
+                                            checked={mapHisKeys.includes(hw.ward_key)}
+                                            onChange={(e) => {
+                                                if (e.target.checked) setMapHisKeys([...mapHisKeys, hw.ward_key]);
+                                                else setMapHisKeys(mapHisKeys.filter(k => k !== hw.ward_key));
+                                            }}
+                                            className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                                        />
+                                        <div className="flex flex-col">
+                                            <span className={`text-sm font-bold ${mapHisKeys.includes(hw.ward_key) ? 'text-blue-700' : 'text-gray-800'}`}>
+                                                {hw.ward_name}
+                                            </span>
+                                            <span className="text-[10px] bg-gray-200 text-gray-500 px-2 py-0.5 rounded-md inline-block w-fit mt-1 font-mono">
+                                                ID: {hw.source_ward_id} (Key: {hw.ward_key})
+                                            </span>
+                                        </div>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="p-4 bg-gray-50 border-t flex justify-end gap-3">
+                            <button onClick={() => setMapWardId(null)}
+                                className="px-5 py-2.5 bg-white border-2 border-gray-200 text-gray-600 font-bold rounded-xl hover:bg-gray-50 transition-colors">
+                                ยกเลิก
+                            </button>
+                            <button onClick={handleSaveMapping} disabled={saving}
+                                className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-500 text-white font-bold rounded-xl shadow hover:shadow-lg transition-all flex items-center gap-2">
+                                {saving ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-save"></i>}
+                                บันทึกการผูกตึก
+                            </button>
                         </div>
                     </div>
                 </div>

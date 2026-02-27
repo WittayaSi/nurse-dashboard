@@ -24,15 +24,7 @@ export async function GET(request: NextRequest) {
             rnCount: opdDailyShifts.rnCount,
             nonRnCount: opdDailyShifts.nonRnCount,
             patientTotal: opdDailyShifts.patientTotal,
-            // Legacy columns (for backward compat)
-            triage1: opdDailyShifts.triage1,
-            triage2: opdDailyShifts.triage2,
-            triage3: opdDailyShifts.triage3,
-            triage4: opdDailyShifts.triage4,
-            triage5: opdDailyShifts.triage5,
-            ivpCount: opdDailyShifts.ivpCount,
-            emsCount: opdDailyShifts.emsCount,
-            lrCount: opdDailyShifts.lrCount,
+
             // New flexible data
             categoryData: opdDailyShifts.categoryData,
             workloadScore: opdDailyShifts.workloadScore,
@@ -110,15 +102,7 @@ export async function POST(request: NextRequest) {
                 rnCount: row.rnCount ?? 0,
                 nonRnCount: row.nonRnCount ?? 0,
                 patientTotal: row.patientTotal ?? 0,
-                // Legacy columns
-                triage1: row.triage1 ?? 0,
-                triage2: row.triage2 ?? 0,
-                triage3: row.triage3 ?? 0,
-                triage4: row.triage4 ?? 0,
-                triage5: row.triage5 ?? 0,
-                ivpCount: row.ivpCount ?? 0,
-                emsCount: row.emsCount ?? 0,
-                lrCount: row.lrCount ?? 0,
+
                 // New flexible data
                 categoryData: Object.keys(categoryData).length > 0 ? categoryData : null,
                 workloadScore: workload.toFixed(2),
@@ -133,14 +117,7 @@ export async function POST(request: NextRequest) {
                     rnCount: sql`excluded.rn_count`,
                     nonRnCount: sql`excluded.non_rn_count`,
                     patientTotal: sql`excluded.patient_total`,
-                    triage1: sql`excluded.triage_1`,
-                    triage2: sql`excluded.triage_2`,
-                    triage3: sql`excluded.triage_3`,
-                    triage4: sql`excluded.triage_4`,
-                    triage5: sql`excluded.triage_5`,
-                    ivpCount: sql`excluded.ivp_count`,
-                    emsCount: sql`excluded.ems_count`,
-                    lrCount: sql`excluded.lr_count`,
+
                     categoryData: sql`excluded.category_data`,
                     workloadScore: sql`excluded.workload_score`,
                     updatedAt: new Date(),

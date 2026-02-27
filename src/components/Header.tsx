@@ -12,9 +12,9 @@ interface HeaderProps {
     wards: { id: number; name: string }[];
 }
 
-export default function Header({ 
-    dept, setDept, ward, setWard, date, setDate, 
-    onRefresh, onOpenSettings, wards 
+export default function Header({
+    dept, setDept, ward, setWard, date, setDate,
+    onRefresh, onOpenSettings, wards
 }: HeaderProps) {
     return (
         <header className="glass-panel p-4 mb-6">
@@ -31,14 +31,14 @@ export default function Header({
 
                 {/* Filters */}
                 <div className="flex flex-wrap items-center gap-3">
-                    
+
                     {/* Department Type Selector */}
                     <div className="flex items-center bg-white rounded-xl px-4 py-2 border-2 border-indigo-200 shadow-sm">
                         <i className="fa-solid fa-layer-group text-indigo-500 mr-2"></i>
                         <label className="text-xs text-gray-500 mr-2 font-semibold">ประเภท:</label>
-                        <select 
-                            value={dept} 
-                            onChange={(e) => setDept(e.target.value as 'IPD' | 'OPD')} 
+                        <select
+                            value={dept}
+                            onChange={(e) => setDept(e.target.value as 'IPD' | 'OPD')}
                             className="text-sm font-bold text-indigo-700 bg-transparent outline-none cursor-pointer"
                         >
                             <option value="IPD">ผู้ป่วยใน (IPD)</option>
@@ -50,9 +50,9 @@ export default function Header({
                     <div className="flex items-center bg-white rounded-xl px-4 py-2 border border-gray-200 shadow-sm">
                         <i className="fa-solid fa-hospital-user text-gray-400 mr-2"></i>
                         <label className="text-xs text-gray-500 mr-2">หน่วยงาน:</label>
-                        <select 
-                            value={ward} 
-                            onChange={(e) => setWard(e.target.value)} 
+                        <select
+                            value={ward}
+                            onChange={(e) => setWard(e.target.value)}
                             className="text-sm font-semibold text-gray-700 bg-transparent outline-none cursor-pointer min-w-[150px]"
                         >
                             <option value="all">📊 ภาพรวม (All)</option>
@@ -62,20 +62,24 @@ export default function Header({
                         </select>
                     </div>
 
-                    {/* Date Selector - dd/mm/yyyy format */}
-                    <div className="flex items-center bg-white rounded-xl px-4 py-2 border border-gray-200 shadow-sm">
-                        <i className="fa-regular fa-calendar text-gray-400 mr-2"></i>
-                        <label className="text-xs text-gray-500 mr-2">วันที่:</label>
-                        <div className="relative">
-                            <input 
-                                type="date" 
-                                value={date} 
-                                onChange={(e) => setDate(e.target.value)} 
+                    <div className="flex items-center bg-white rounded-xl px-4 py-2 border border-gray-200 shadow-sm relative group focus-within:border-indigo-500 transition-colors">
+                        <i className="fa-regular fa-calendar text-gray-400 mr-2 group-hover:text-indigo-500 transition-colors pointer-events-none"></i>
+                        <label htmlFor="header-date" className="text-xs text-gray-500 mr-2 pointer-events-none whitespace-nowrap">วันที่:</label>
+                        <div className="relative flex items-center w-[130px]">
+                            {/* The actual native input is the single source of truth for clicks */}
+                            <input
+                                id="header-date"
+                                type="date"
+                                value={date}
+                                onChange={(e) => setDate(e.target.value)}
                                 onKeyDown={(e) => e.preventDefault()}
-                                className="text-sm font-semibold bg-transparent outline-none cursor-pointer text-transparent w-[130px]"
+                                className="w-full h-full bg-transparent outline-none cursor-pointer date-input-full-picker text-transparent"
+                                aria-label="วันที่"
                             />
-                            <div className="absolute inset-0 flex items-center pointer-events-none text-sm font-semibold text-gray-700">
-                                {date ? date.split('-').reverse().join('/') : ''}
+                            {/* The visual overlay sits on top but is completely transparent to clicks */}
+                            <div className="absolute inset-0 flex justify-between items-center text-sm font-semibold text-gray-700 pointer-events-none px-2">
+                                <span>{date ? date.split('-').reverse().join('/') : ''}</span>
+                                <i className="fa-regular fa-calendar-days text-gray-400 group-hover:text-indigo-500 transition-colors"></i>
                             </div>
                         </div>
                     </div>

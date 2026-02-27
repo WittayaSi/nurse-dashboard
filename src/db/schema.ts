@@ -23,6 +23,8 @@ export const nursingWards = pgTable('nursing_wards', {
     isActive: boolean('is_active').default(true),
     // Per-ward OPD workload field config (groups of fields with multipliers)
     opdFieldsConfig: jsonb('opd_fields_config'),
+    // Array of DW dimension ward_key integers (e.g., [3, 7])
+    hisWardKeys: jsonb('his_ward_keys').$type<number[]>(),
     createdAt: timestamp('created_at').defaultNow(),
     updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -80,17 +82,6 @@ export const opdDailyShifts = pgTable('opd_daily_shifts', {
     nonRnCount: integer('non_rn_count').default(0),
     patientTotal: integer('patient_total').default(0),
 
-    // ผู้ป่วยตาม Triage Level
-    triage1: integer('triage_1').default(0),   // Level 1 (x3.2) ฉุกเฉินวิกฤต
-    triage2: integer('triage_2').default(0),   // Level 2 (x2.5) ฉุกเฉินเร่งด่วน
-    triage3: integer('triage_3').default(0),   // Level 3 (x1.0) เร่งด่วน
-    triage4: integer('triage_4').default(0),   // Level 4 (x0.5) ไม่รุนแรง
-    triage5: integer('triage_5').default(0),   // Level 5 (x0.25) ทั่วไป
-
-    // หัตถการเพิ่มเติม
-    ivpCount: integer('ivp_count').default(0),   // IVP (x2.0)
-    emsCount: integer('ems_count').default(0),   // EMS (x1.5)
-    lrCount: integer('lr_count').default(0),     // จินสูตร/LR (x3.5)
 
     // Dynamic category data (JSONB) — stores per-ward flexible fields
     categoryData: jsonb('category_data'),
@@ -133,3 +124,26 @@ export const opdDailyShiftsRelations = relations(opdDailyShifts, ({ one }) => ({
         references: [nursingWards.id],
     }),
 }));
+
+// ==========================================
+// fact_visits - DW Admissions/Discharges
+// ==========================================
+export const factVisits = pgTable('fact_visits', {
+    visitSk: integer('visit_sk').primaryKey(),
+    sourceVisitId: varchar('source_visit_id', { length: 50 }),
+    sourceAdmissionId: varchar('source_admission_id', { length: 50 }),
+    visitDateKey: integer('visit_date_key'),
+    dischargeDateKey: integer('discharge_date_key'),
+    patientSk: integer('patient_sk'),
+    departmentKey: integer('department_key'),
+    wardKey: integer('ward_key'),
+    attendingDoctorKey: integer('attending_doctor_key'),
+    admissionDoctorKey: integer('admission_doctor_key'),
+    ownerDoctorKey: integer('owner_doctor_key'),
+    visitType: varchar('visit_type', { length: 20 }),
+    lengthOfStay: numeric('length_of_stay'),
+    isAdmit: integer('is_admit').default(0),
+    isDischarge: integer('is_discharge').default(0),
+    visitCount: integer('visit_count').default(1),
+    isCancelled: integer('is_cancelled').default(0),
+});

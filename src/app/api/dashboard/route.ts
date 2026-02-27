@@ -165,14 +165,7 @@ async function getOPDDashboard(date: string, wardId: string | null, deptType: st
         rnCount: opdDailyShifts.rnCount,
         nonRnCount: opdDailyShifts.nonRnCount,
         patientTotal: opdDailyShifts.patientTotal,
-        triage1: opdDailyShifts.triage1,
-        triage2: opdDailyShifts.triage2,
-        triage3: opdDailyShifts.triage3,
-        triage4: opdDailyShifts.triage4,
-        triage5: opdDailyShifts.triage5,
-        ivpCount: opdDailyShifts.ivpCount,
-        emsCount: opdDailyShifts.emsCount,
-        lrCount: opdDailyShifts.lrCount,
+
         workloadScore: opdDailyShifts.workloadScore,
     })
     .from(opdDailyShifts)
