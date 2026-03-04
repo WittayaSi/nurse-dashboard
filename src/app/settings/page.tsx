@@ -85,6 +85,16 @@ export default function SettingsPage() {
             disabled: false,
             badge: null,
         },
+        {
+            href: '/settings/trends',
+            icon: 'fa-solid fa-chart-line',
+            title: 'วิเคราะห์แนวโน้ม (Trend Analysis)',
+            desc: 'กราฟวิเคราะห์แนวโน้มภาระงานย้อนหลังรายวอร์ด',
+            gradient: 'from-violet-600 to-fuchsia-600',
+            bg: 'bg-violet-50',
+            disabled: false,
+            badge: null,
+        },
     ];
 
     return (

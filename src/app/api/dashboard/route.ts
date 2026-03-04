@@ -3,6 +3,7 @@ import { db } from '@/db';
 import { nursingWards, ipdDailyShifts, ipdDailySummary, opdDailyShifts } from '@/db/schema';
 import { eq, and, sql, desc } from 'drizzle-orm';
 import { calcIPDHppd, calcIPDProductivity } from '@/lib/ipd-calc';
+import { calcOPDExpectStaff, calcOPDProductivity } from '@/lib/opd-calc';
 
 // GET - Aggregated dashboard data
 export async function GET(request: NextRequest) {
@@ -186,11 +187,11 @@ async function getOPDDashboard(date: string, wardId: string | null, deptType: st
 
     let totalRN = 0, totalNonRN = 0, totalPatients = 0, totalWorkload = 0;
     const wardData: { name: string; prod: number }[] = [];
-    const shiftStaff: Record<string, { rn: number; nonRn: number; workload: number }> = {
-        morning: { rn: 0, nonRn: 0, workload: 0 },
-        afternoon: { rn: 0, nonRn: 0, workload: 0 },
-        night: { rn: 0, nonRn: 0, workload: 0 },
-        midnight: { rn: 0, nonRn: 0, workload: 0 },
+    const shiftStaff: Record<string, { rn: number; nonRn: number; workload: number; patients: number }> = {
+        morning: { rn: 0, nonRn: 0, workload: 0, patients: 0 },
+        afternoon: { rn: 0, nonRn: 0, workload: 0, patients: 0 },
+        night: { rn: 0, nonRn: 0, workload: 0, patients: 0 },
+        midnight: { rn: 0, nonRn: 0, workload: 0, patients: 0 },
     };
 
     filteredShifts.forEach(s => {
@@ -207,47 +208,42 @@ async function getOPDDashboard(date: string, wardId: string | null, deptType: st
             shiftStaff[key].rn += s.rnCount ?? 0;
             shiftStaff[key].nonRn += s.nonRnCount ?? 0;
             shiftStaff[key].workload += wl;
+            shiftStaff[key].patients += s.patientTotal ?? 0;
         }
     });
 
     // Group by ward for chart
-    const wardMap: { [key: string]: { workload: number; staff: number } } = {};
+    const wardMap: { [key: string]: { workload: number; staff: number; patients: number } } = {};
     filteredShifts.forEach(s => {
         const name = s.wardName ?? 'Unknown';
         if (!wardMap[name]) {
-            wardMap[name] = { workload: 0, staff: 0 };
+            wardMap[name] = { workload: 0, staff: 0, patients: 0 };
         }
         wardMap[name].workload += parseFloat(s.workloadScore ?? '0');
         wardMap[name].staff += (s.rnCount ?? 0) + (s.nonRnCount ?? 0);
+        wardMap[name].patients += s.patientTotal ?? 0;
     });
     
     Object.entries(wardMap).forEach(([name, data]) => {
         if (data.staff > 0) {
-            const expect = data.workload / 7;
-            const prod = (expect / data.staff) * 100;
-            wardData.push({ name, prod: parseFloat(prod.toFixed(2)) });
+            const prod = calcOPDProductivity(data.workload, data.staff, data.patients);
+            wardData.push({ name, prod });
         } else {
             wardData.push({ name, prod: 0 });
         }
     });
 
-    // Calculate OPD productivity using LR Standard Formula:
-    // 1. Nursing Need (Workload) = totalWorkload (Sum of count * multiplier)
-    // 2. Expect Staff = Workload / 7 (hours per shift)
-    // 3. Actual Staff = totalStaff (RN + Non-RN)
-    // 4. Productivity = (Expect / Actual) * 100
+    // Calculate OPD productivity using shared formula
     const totalStaff = totalRN + totalNonRN;
-    const expectStaff = totalWorkload / 7;
-    const opdProductivity = totalStaff > 0
-        ? parseFloat(((expectStaff / totalStaff) * 100).toFixed(2))
-        : 0;
+    const expectStaff = calcOPDExpectStaff(totalWorkload);
+    const opdProductivity = calcOPDProductivity(totalWorkload, totalStaff, totalPatients);
 
     // Helper to enrich shift with productivity
-    const enrichShift = (s: { rn: number; nonRn: number; workload: number }) => {
+    const enrichShift = (s: { rn: number; nonRn: number; workload: number; patients: number }) => {
         const actual = s.rn + s.nonRn;
-        const expect = s.workload / 7;
-        const prod = actual > 0 ? (expect / actual) * 100 : 0;
-        return { ...s, actual, expect, productivity: parseFloat(prod.toFixed(2)) };
+        const expect = calcOPDExpectStaff(s.workload);
+        const prod = calcOPDProductivity(s.workload, actual, s.patients);
+        return { ...s, actual, expect, productivity: prod };
     };
 
     return {

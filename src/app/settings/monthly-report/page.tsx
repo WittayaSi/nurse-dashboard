@@ -233,14 +233,7 @@ export default function MonthlyReportPage() {
         </div>
       </div>
 
-      {/* Legend */}
-      {data.length > 0 && !loading && (
-        <div className="mt-6 flex flex-wrap gap-4 text-xs font-semibold">
-          <div className="flex items-center gap-1.5 text-gray-500"><div className="w-3 h-3 rounded bg-red-100 border border-red-200"></div> &gt; 115% (ภาระงานสูง)</div>
-          <div className="flex items-center gap-1.5 text-gray-500"><div className="w-3 h-3 rounded bg-emerald-100 border border-emerald-200"></div> 85% - 115% (ภาระงานเหมาะสม)</div>
-          <div className="flex items-center gap-1.5 text-gray-500"><div className="w-3 h-3 rounded bg-amber-100 border border-amber-200"></div> &lt; 85% (ภาระงานน้อย)</div>
-        </div>
-      )}
+
     </div>
   );
 }

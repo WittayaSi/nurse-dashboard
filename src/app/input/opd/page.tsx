@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import LoadingOverlay from '@/components/LoadingOverlay';
+import { calcOPDExpectStaff, calcOPDProductivity, calcOPDNhppdExpect, calcOPDNhppdActual } from '@/lib/opd-calc';
 
 interface Ward {
     id: number;
@@ -604,15 +605,20 @@ export default function OPDInputPage() {
                 {/* Productivity Summary (LR Standard) */}
                 {config && (() => {
                     const sumWorkload = activeShifts.reduce((sum, s) => sum + calcWorkload(shifts[s as keyof typeof shifts], config), 0);
-                    const expectStaff = sumWorkload / 7;
+                    const expectStaff = calcOPDExpectStaff(sumWorkload);
                     let actualRN = 0;
                     let actualNonRN = 0;
+                    let totalPatients = 0;
                     activeShifts.forEach(s => {
-                        actualRN += shifts[s as keyof typeof shifts].rnCount || 0;
-                        actualNonRN += shifts[s as keyof typeof shifts].nonRnCount || 0;
+                        const sd = shifts[s as keyof typeof shifts];
+                        actualRN += sd.rnCount || 0;
+                        actualNonRN += sd.nonRnCount || 0;
+                        totalPatients += calcPatientTotal(sd);
                     });
                     const actualStaff = actualRN + actualNonRN;
-                    const totalProductivity = actualStaff > 0 ? (expectStaff / actualStaff) * 100 : 0;
+                    const totalProductivity = calcOPDProductivity(sumWorkload, actualStaff, totalPatients);
+                    const nhppdExpect = calcOPDNhppdExpect(sumWorkload, totalPatients);
+                    const nhppdActual = calcOPDNhppdActual(actualStaff, totalPatients);
 
                     return (
                         <section className="card-kpi p-0 mb-6 overflow-hidden" aria-label="สรุปอัตรากำลังและ Productivity">
@@ -626,26 +632,37 @@ export default function OPDInputPage() {
                                 {activeShifts.map(s => {
                                     const shiftData = shifts[s as keyof typeof shifts];
                                     const wl = calcWorkload(shiftData, config);
-                                    const exp = wl / 7;
+                                    const exp = calcOPDExpectStaff(wl);
                                     const actRN = shiftData.rnCount || 0;
                                     const actNonRN = shiftData.nonRnCount || 0;
                                     const actStaff = actRN + actNonRN;
-                                    const prod = actStaff > 0 ? (exp / actStaff) * 100 : 0;
+                                    const patients = calcPatientTotal(shiftData);
+                                    const prod = calcOPDProductivity(wl, actStaff, patients);
+                                    const shiftNhppdExpect = calcOPDNhppdExpect(wl, patients);
+                                    const shiftNhppdActual = calcOPDNhppdActual(actStaff, patients);
 
                                     return (
-                                        <div key={s} className="p-4 grid grid-cols-2 md:grid-cols-5 items-center gap-4 bg-white hover:bg-emerald-50/30 transition-colors">
+                                        <div key={s} className="p-4 grid grid-cols-2 md:grid-cols-7 items-center gap-3 bg-white hover:bg-emerald-50/30 transition-colors">
                                             <div className="font-bold text-gray-700 md:w-16 text-center bg-gray-100 rounded-lg py-1 text-sm md:mx-auto col-span-2 md:col-span-1">เวร{shiftThaiLabels[s]}</div>
                                             <div>
-                                                <div className="text-[10px] font-bold text-gray-400 uppercase">Nursing Need</div>
+                                                <div className="text-[10px] font-bold text-gray-400 uppercase">Nursing Need/วัน</div>
                                                 <div className="text-sm font-bold text-gray-700">{wl.toFixed(2)}</div>
                                             </div>
                                             <div>
-                                                <div className="text-[10px] font-bold text-emerald-600 uppercase">Expect</div>
+                                                <div className="text-[10px] font-bold text-emerald-600 uppercase">อัตรากำลังที่ต้องการ/วัน</div>
                                                 <div className="text-sm font-bold text-emerald-700">{exp.toFixed(2)}</div>
                                             </div>
                                             <div>
-                                                <div className="text-[10px] font-bold text-indigo-500 uppercase">Actual</div>
+                                                <div className="text-[10px] font-bold text-cyan-600 uppercase">NHPPD (Expect)</div>
+                                                <div className="text-sm font-bold text-cyan-700">{patients > 0 ? shiftNhppdExpect.toFixed(2) : '-'}</div>
+                                            </div>
+                                            <div>
+                                                <div className="text-[10px] font-bold text-indigo-500 uppercase">อัตรากำลังที่ทำงานจริง</div>
                                                 <div className="text-sm font-bold text-indigo-600">{actStaff} <span className="text-[10px] font-normal text-indigo-400">({actRN}+{actNonRN})</span></div>
+                                            </div>
+                                            <div>
+                                                <div className="text-[10px] font-bold text-orange-500 uppercase">NHPPD (Actual)</div>
+                                                <div className="text-sm font-bold text-orange-600">{patients > 0 ? shiftNhppdActual.toFixed(2) : '-'}</div>
                                             </div>
                                             <div>
                                                 <div className="text-[10px] font-bold text-purple-600 uppercase">Productivity</div>
@@ -659,21 +676,31 @@ export default function OPDInputPage() {
                             </div>
 
                             {/* Total Summary */}
-                            <div className="p-5 grid grid-cols-2 md:grid-cols-4 gap-4 bg-emerald-50 border-t-2 border-emerald-100">
+                            <div className="p-5 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 bg-emerald-50 border-t-2 border-emerald-100">
                                 <div>
-                                    <div className="text-[10px] font-bold text-gray-400 uppercase">Nursing Need (รวม)</div>
+                                    <div className="text-[10px] font-bold text-gray-400 uppercase">Nursing Need/วัน (รวม)</div>
                                     <div className="text-xl font-bold text-gray-700">{sumWorkload.toFixed(2)}</div>
                                     <div className="text-[10px] text-gray-500">ภาระงานรวมทั้งหมด</div>
                                 </div>
                                 <div>
-                                    <div className="text-[10px] font-bold text-emerald-600 uppercase">Expect (รวม)</div>
+                                    <div className="text-[10px] font-bold text-emerald-600 uppercase">อัตรากำลังที่ต้องการ/วัน (รวม)</div>
                                     <div className="text-xl font-bold text-emerald-700">{expectStaff.toFixed(2)}</div>
                                     <div className="text-[10px] text-emerald-600/70">Need / 7 ชม.</div>
                                 </div>
                                 <div>
-                                    <div className="text-[10px] font-bold text-indigo-500 uppercase">Actual (รวม)</div>
+                                    <div className="text-[10px] font-bold text-cyan-600 uppercase">NHPPD (Expect)</div>
+                                    <div className="text-xl font-bold text-cyan-700">{totalPatients > 0 ? nhppdExpect.toFixed(2) : '-'}</div>
+                                    <div className="text-[10px] text-cyan-500">Nursing Need / ผู้ป่วย</div>
+                                </div>
+                                <div>
+                                    <div className="text-[10px] font-bold text-indigo-500 uppercase">อัตรากำลังที่ทำงานจริง (รวม)</div>
                                     <div className="text-xl font-bold text-indigo-600">{actualStaff} <span className="text-xs font-normal text-indigo-400">(RN {actualRN} + Non-RN {actualNonRN})</span></div>
                                     <div className="text-[10px] text-indigo-400">บุคลากรรวมทั้งหมด</div>
+                                </div>
+                                <div>
+                                    <div className="text-[10px] font-bold text-orange-500 uppercase">NHPPD (Actual)</div>
+                                    <div className="text-xl font-bold text-orange-600">{totalPatients > 0 ? nhppdActual.toFixed(2) : '-'}</div>
+                                    <div className="text-[10px] text-orange-400">(Actual × 7) / ผู้ป่วย</div>
                                 </div>
                                 <div>
                                     <div className="text-[10px] font-bold justify-between flex text-purple-600 uppercase">
