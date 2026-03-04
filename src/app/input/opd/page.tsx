@@ -325,7 +325,10 @@ export default function OPDInputPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
             });
-            if (!res.ok) throw new Error('Failed to save data');
+            if (!res.ok) {
+                const errData = await res.json();
+                throw new Error(errData.error || 'Failed to save data');
+            }
 
             showToast('success', 'บันทึกข้อมูลสำเร็จ!');
             setIsDirty(false);
@@ -334,6 +337,46 @@ export default function OPDInputPage() {
             showToast('error', err.message);
         } finally {
             setSaving(false);
+        }
+    };
+
+    const copyFromYesterday = async () => {
+        if (!selectedWard || !date) return;
+
+        const yesterday = new Date(date);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yestStr = yesterday.toISOString().split('T')[0];
+
+        setLoading(true);
+        try {
+            const res = await fetch(`/api/opd/shifts?date=${yestStr}&wardId=${selectedWard}`);
+            if (!res.ok) throw new Error('Failed to fetch yesterday data');
+            const data = await res.json();
+
+            if (data.length === 0) {
+                showToast('error', 'ไม่มีข้อมูลของเมื่อวานให้คัดลอก');
+                return;
+            }
+
+            const newShifts = { ...shifts };
+            data.forEach((s: any) => {
+                const key = s.shift as keyof typeof newShifts;
+                if (newShifts[key]) {
+                    newShifts[key] = {
+                        rnCount: s.rnCount ?? 0,
+                        nonRnCount: s.nonRnCount ?? 0,
+                        patientTotal: s.patientTotal ?? 0,
+                        categoryData: s.categoryData ?? {},
+                    };
+                }
+            });
+            setShifts(newShifts);
+            setIsDirty(true);
+            showToast('success', 'คัดลอกข้อมูลกำลังคนจากเมื่อวานเรียบร้อยแล้ว');
+        } catch (err: any) {
+            showToast('error', err.message);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -457,6 +500,20 @@ export default function OPDInputPage() {
                         </p>
                     )}
                 </div>
+
+                <div className="flex items-end">
+                    <button
+                        onClick={copyFromYesterday}
+                        disabled={loading || readonly || !selectedWard || !date}
+                        className="h-[46px] px-4 bg-white border-2 border-rose-100 hover:border-rose-300 hover:bg-rose-50 text-rose-600 rounded-xl text-sm font-bold transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed group"
+                        aria-label="คัดลอกเวรจากเมื่อวาน"
+                        title="คัดลอกข้อมูลเวรจากเมื่อวาน"
+                        type="button"
+                    >
+                        <i className="fa-solid fa-copy group-hover:scale-110 transition-transform"></i>
+                        <span className="hidden sm:inline">คัดลอกเวรจากเมื่อวาน</span>
+                    </button>
+                </div>
             </div>
 
             <LoadingOverlay isLoading={loading} message="กำลังดึงข้อมูล OPD..." />
@@ -497,17 +554,21 @@ export default function OPDInputPage() {
                                     </div>
                                 ))}
 
-                                {/* Patient total row — manual input */}
+                                {/* Patient total row — auto-calculated */}
                                 <div className="grid items-center gap-2" style={{ gridTemplateColumns: `140px repeat(${visibleShifts.length}, 1fr)` }}>
-                                    <div className="text-xs font-bold text-teal-600 px-1">จำนวน Pt</div>
-                                    {visibleShifts.map(({ key }) => (
-                                        <input key={key} type="number" min="0" inputMode="numeric"
-                                            value={shifts[key].patientTotal ?? ''}
-                                            onChange={(e) => handleStaffChange(key, 'patientTotal', e.target.value)}
-                                            disabled={readonly}
-                                            className={`w-full px-1 py-1.5 border rounded-lg text-center text-sm font-bold focus:outline-none focus:ring-2 focus:ring-teal-300 transition-colors ${readonly ? 'bg-gray-100 border-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white border-gray-200 text-gray-700'}`}
-                                        />
-                                    ))}
+                                    <div className="text-xs font-bold text-teal-600 px-1">จำนวน Pt (รวม)</div>
+                                    {visibleShifts.map(({ key }) => {
+                                        const computedTotal = calcPatientTotal(shifts[key]);
+                                        return (
+                                            <input key={key} type="text"
+                                                value={computedTotal > 0 ? computedTotal : ''}
+                                                readOnly
+                                                disabled
+                                                title="รวมอัตโนมัติจากหมวดหมู่ย่อย"
+                                                className="w-full px-1 py-1.5 border rounded-lg text-center text-sm font-bold bg-teal-50 border-teal-100 text-teal-700 cursor-not-allowed opacity-90"
+                                            />
+                                        );
+                                    })}
                                 </div>
 
                                 {/* Separator */}

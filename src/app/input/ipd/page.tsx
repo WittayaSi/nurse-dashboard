@@ -4,18 +4,20 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import LoadingOverlay from '@/components/LoadingOverlay';
+import { calcIPDHppd, calcIPDProductivity } from '@/lib/ipd-calc';
 
 interface Ward {
     id: number;
     code: string;
     name: string;
     deptType: string;
+    bedCount?: number;
 }
 
 interface ShiftData {
     hnCount: number;
     rnCount: number;
-    tnCount: number;
+    pnCount: number;
     naCount: number;
 }
 
@@ -37,7 +39,7 @@ interface ToastMessage {
     text: string;
 }
 
-const emptyShift = (): ShiftData => ({ hnCount: 0, rnCount: 0, tnCount: 0, naCount: 0 });
+const emptyShift = (): ShiftData => ({ hnCount: 0, rnCount: 0, pnCount: 0, naCount: 0 });
 const emptySummary = (): SummaryData => ({
     totalStaffDay: 0, patientDay: 0, hppd: 0,
     dischargeCount: 0, newAdmission: 0,
@@ -106,7 +108,7 @@ export default function IPDInputPage() {
     });
     const [summary, setSummary] = useState<SummaryData>(emptySummary());
     const [saving, setSaving] = useState(false);
-    const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; wardName: string; dateStr: string } | null>(null);
+    const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; wardName: string; dateStr: string; isOverBeds?: boolean; maxBeds?: number } | null>(null);
     const [hasExistingData, setHasExistingData] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -252,7 +254,7 @@ export default function IPDInputPage() {
                     newShifts[key] = {
                         hnCount: s.hnCount ?? 0,
                         rnCount: s.rnCount ?? 0,
-                        tnCount: s.tnCount ?? 0,
+                        pnCount: s.pnCount ?? 0,
                         naCount: s.naCount ?? 0,
                     };
                 }
@@ -315,20 +317,17 @@ export default function IPDInputPage() {
     };
 
     // Auto calculate total staff
-    const totalStaff = (s: ShiftData) => s.hnCount + s.rnCount + s.tnCount + s.naCount;
+    const totalStaff = (s: ShiftData) => s.hnCount + s.rnCount + s.pnCount + s.naCount;
     const totalAllShifts = totalStaff(shifts.morning) + totalStaff(shifts.afternoon) + totalStaff(shifts.night);
 
-    // Auto calculate HPPD
-    const shiftHours = 7;
-    const calcHppd = summary.patientDay > 0
-        ? parseFloat(((totalAllShifts * shiftHours) / summary.patientDay).toFixed(2))
-        : 0;
+    // Detect ICU ward
+    const currentWardObj = wards.find(w => w.id === selectedWard);
+    const isIcuWard = currentWardObj ? /icu/i.test(currentWardObj.name) : false;
+    const isSpecialWard = currentWardObj ? /พิเศษ/i.test(currentWardObj.name) : false;
 
-    // Auto calculate Productivity
-    const standardHppd = 6.0;
-    const calcProductivity = totalAllShifts > 0
-        ? parseFloat(((summary.patientDay * standardHppd) / (totalAllShifts * shiftHours) * 100).toFixed(2))
-        : 0;
+    // Auto calculate HPPD & Productivity (shared formula)
+    const calcHppd = calcIPDHppd(totalAllShifts, summary.patientDay);
+    const calcProductivity = calcIPDProductivity(totalAllShifts, summary.patientDay, calcHppd);
 
     const handleSave = async () => {
         // Validation
@@ -340,7 +339,7 @@ export default function IPDInputPage() {
         let totalStaff = 0;
         for (const [key] of Object.entries(shiftNames)) {
             const s = shifts[key as keyof typeof shifts];
-            totalStaff += (s.hnCount || 0) + (s.rnCount || 0) + (s.tnCount || 0) + (s.naCount || 0);
+            totalStaff += (s.hnCount || 0) + (s.rnCount || 0) + (s.pnCount || 0) + (s.naCount || 0);
         }
 
         if (totalStaff === 0 && (!summary.patientDay || summary.patientDay <= 0)) {
@@ -348,10 +347,18 @@ export default function IPDInputPage() {
             return;
         }
 
-        // Confirmation dialog for update mode
-        if (isEditing) {
-            const wardName = wards.find(w => w.id === selectedWard)?.name || '';
-            setConfirmDialog({ open: true, wardName, dateStr: date.split('-').reverse().join('/') });
+        const wardName = wards.find(w => w.id === selectedWard)?.name || '';
+        const maxBeds = wards.find(w => w.id === selectedWard)?.bedCount || summary.totalBeds || 0;
+        const isOverBeds = maxBeds > 0 && summary.patientDay > maxBeds;
+
+        if (isOverBeds || isEditing) {
+            setConfirmDialog({
+                open: true,
+                wardName,
+                dateStr: date.split('-').reverse().join('/'),
+                isOverBeds,
+                maxBeds
+            });
             return;
         }
 
@@ -400,14 +407,59 @@ export default function IPDInputPage() {
         }
     };
 
+    const copyFromYesterday = async () => {
+        if (!selectedWard || !date) return;
+
+        const yesterday = new Date(date);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yestStr = yesterday.toISOString().split('T')[0];
+
+        setLoading(true);
+        try {
+            const res = await fetch(`/api/ipd/shifts?date=${yestStr}&wardId=${selectedWard}`);
+            if (!res.ok) throw new Error('Failed to fetch yesterday data');
+            const data = await res.json();
+
+            if (data.length === 0) {
+                showToast('error', 'ไม่มีข้อมูลของเมื่อวานให้คัดลอก');
+                return;
+            }
+
+            const newShifts = { ...shifts };
+            data.forEach((s: any) => {
+                const key = s.shift as keyof typeof newShifts;
+                if (newShifts[key]) {
+                    newShifts[key] = {
+                        hnCount: s.hnCount ?? 0,
+                        rnCount: s.rnCount ?? 0,
+                        pnCount: s.pnCount ?? 0,
+                        naCount: s.naCount ?? 0,
+                    };
+                }
+            });
+            setShifts(newShifts);
+            setIsDirty(true);
+            showToast('success', 'คัดลอกข้อมูลกำลังคนจากเมื่อวานเรียบร้อยแล้ว');
+        } catch (err: any) {
+            showToast('error', err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const shiftLabels = [
         { key: 'morning' as const, label: '☀️ เช้า', bg: 'bg-amber-50', border: 'border-amber-200' },
         { key: 'afternoon' as const, label: '🌤️ บ่าย', bg: 'bg-blue-50', border: 'border-blue-200' },
         { key: 'night' as const, label: '🌙 ดึก', bg: 'bg-indigo-50', border: 'border-indigo-200' },
     ];
 
-    const fieldLabels: Record<string, string> = { hnCount: 'HN', rnCount: 'RN', tnCount: 'TN', naCount: 'NA' };
+    const fieldLabels: Record<string, string> = { hnCount: 'HN', rnCount: 'RN', pnCount: isSpecialWard ? 'PN' : 'PN', naCount: 'NA' };
     const shiftThaiLabels: Record<string, string> = { morning: 'เช้า', afternoon: 'บ่าย', night: 'ดึก' };
+
+    // Filter staff fields: hide TN for normal wards, show as PN for ward พิเศษ
+    const staffFields = isSpecialWard
+        ? (['hnCount', 'rnCount', 'pnCount', 'naCount'] as const)
+        : (['hnCount', 'rnCount', 'naCount'] as const);
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-4 md:p-6">
@@ -418,13 +470,17 @@ export default function IPDInputPage() {
             {confirmDialog?.open && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setConfirmDialog(null)}>
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden animate-scale-in" onClick={e => e.stopPropagation()}>
-                        <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-4 flex items-center gap-3 text-white">
+                        <div className={`px-6 py-4 flex items-center gap-3 text-white ${confirmDialog.isOverBeds ? 'bg-gradient-to-r from-red-500 to-orange-500' : 'bg-gradient-to-r from-amber-500 to-orange-500'}`}>
                             <div className="bg-white/20 p-2 rounded-lg">
-                                <i className="fa-solid fa-triangle-exclamation text-xl"></i>
+                                <i className={`fa-solid ${confirmDialog.isOverBeds ? 'fa-user-injured' : 'fa-triangle-exclamation'} text-xl`}></i>
                             </div>
                             <div>
-                                <h3 className="font-bold text-lg">ยืนยันการอัพเดทข้อมูล</h3>
-                                <p className="text-white/80 text-xs">ข้อมูลเดิมจะถูกเขียนทับ</p>
+                                <h3 className="font-bold text-lg">
+                                    {confirmDialog.isOverBeds ? 'แจ้งเตือน: จำนวนผู้ป่วยเกินเตียง' : 'ยืนยันการอัพเดทข้อมูล'}
+                                </h3>
+                                <p className="text-white/80 text-xs">
+                                    {confirmDialog.isOverBeds ? `เตียงทั้งหมดมี ${confirmDialog.maxBeds} เตียง แต่กรอกคนไข้ข้ามคืน ${summary.patientDay} คน ยืนยันใช่หรือไม่?` : 'ข้อมูลเดิมจะถูกเขียนทับ'}
+                                </p>
                             </div>
                         </div>
                         <div className="px-6 py-5 space-y-3">
@@ -515,11 +571,20 @@ export default function IPDInputPage() {
                             <i className="fa-regular fa-calendar-days text-gray-400 group-hover:text-indigo-500 transition-colors"></i>
                         </div>
                     </div>
-                    {date && (
-                        <p className="text-[11px] text-indigo-600 font-semibold mt-1">
-                            {new Date(date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}
-                        </p>
-                    )}
+                </div>
+
+                <div className="flex items-end">
+                    <button
+                        onClick={copyFromYesterday}
+                        disabled={loading || readonly || !selectedWard || !date}
+                        className="h-[46px] px-4 bg-white border-2 border-indigo-100 hover:border-indigo-300 hover:bg-indigo-50 text-indigo-600 rounded-xl text-sm font-bold transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed group"
+                        aria-label="คัดลอกเวรจากเมื่อวาน"
+                        title="คัดลอกข้อมูลเวรจากเมื่อวาน"
+                        type="button"
+                    >
+                        <i className="fa-solid fa-copy group-hover:scale-110 transition-transform"></i>
+                        <span className="hidden sm:inline">คัดลอกเวรจากเมื่อวาน</span>
+                    </button>
                 </div>
             </div>
 
@@ -549,7 +614,7 @@ export default function IPDInputPage() {
 
                     <div className="p-4 space-y-2">
                         {/* Staff rows */}
-                        {(['hnCount', 'rnCount', 'tnCount', 'naCount'] as const).map(field => (
+                        {staffFields.map(field => (
                             <div key={field} className="grid items-center gap-2" style={{ gridTemplateColumns: `120px repeat(3, 1fr) 80px` }}>
                                 <div className={`text-xs font-bold px-1 ${field === 'rnCount' ? 'text-pink-600' : field === 'naCount' ? 'text-amber-600' : 'text-gray-600'}`}>
                                     {fieldLabels[field]}

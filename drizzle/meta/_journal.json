@@ -15,6 +15,13 @@
       "when": 1772155623279,
       "tag": "0001_skinny_toro",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1772599585977,
+      "tag": "0002_acoustic_psylocke",
+      "breakpoints": true
     }
   ]
 }

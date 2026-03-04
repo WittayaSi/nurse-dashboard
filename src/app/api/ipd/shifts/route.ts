@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
             shift: ipdDailyShifts.shift,
             hnCount: ipdDailyShifts.hnCount,
             rnCount: ipdDailyShifts.rnCount,
-            tnCount: ipdDailyShifts.tnCount,
+            pnCount: ipdDailyShifts.pnCount,
             naCount: ipdDailyShifts.naCount,
         })
         .from(ipdDailyShifts)
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
             shift: row.shift,
             hnCount: row.hnCount ?? 0,
             rnCount: row.rnCount ?? 0,
-            tnCount: row.tnCount ?? 0,
+            pnCount: row.pnCount ?? 0,
             naCount: row.naCount ?? 0,
         }));
 
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
                 set: {
                     hnCount: sql`excluded.hn_count`,
                     rnCount: sql`excluded.rn_count`,
-                    tnCount: sql`excluded.tn_count`,
+                    pnCount: sql`excluded.pn_count`,
                     naCount: sql`excluded.na_count`,
                     updatedAt: new Date(),
                 },

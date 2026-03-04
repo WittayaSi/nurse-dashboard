@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { nursingWards, ipdDailyShifts, ipdDailySummary, opdDailyShifts } from '@/db/schema';
 import { eq, and, sql, desc } from 'drizzle-orm';
+import { calcIPDHppd, calcIPDProductivity } from '@/lib/ipd-calc';
 
 // GET - Aggregated dashboard data
 export async function GET(request: NextRequest) {
@@ -50,7 +51,7 @@ async function getIPDDashboard(date: string, wardId: string | null) {
         shift: ipdDailyShifts.shift,
         hnCount: ipdDailyShifts.hnCount,
         rnCount: ipdDailyShifts.rnCount,
-        tnCount: ipdDailyShifts.tnCount,
+        pnCount: ipdDailyShifts.pnCount,
         naCount: ipdDailyShifts.naCount,
     })
     .from(ipdDailyShifts)
@@ -81,30 +82,30 @@ async function getIPDDashboard(date: string, wardId: string | null) {
     .where(and(...summaryConditions));
 
     // Aggregate shifts
-    const shiftTotals = { morning: { hn: 0, rn: 0, tn: 0, na: 0 }, afternoon: { hn: 0, rn: 0, tn: 0, na: 0 }, night: { hn: 0, rn: 0, tn: 0, na: 0 } };
-    let totalHN = 0, totalRnOnly = 0, totalTN = 0, totalNA = 0;
+    const shiftTotals = { morning: { hn: 0, rn: 0, pn: 0, na: 0 }, afternoon: { hn: 0, rn: 0, pn: 0, na: 0 }, night: { hn: 0, rn: 0, pn: 0, na: 0 } };
+    let totalHN = 0, totalRnOnly = 0, totalPN = 0, totalNA = 0;
 
     shifts.forEach(s => {
         const hn = s.hnCount ?? 0;
         const rn = s.rnCount ?? 0;
-        const tn = s.tnCount ?? 0;
+        const pn = s.pnCount ?? 0;
         const na = s.naCount ?? 0;
         const shiftKey = s.shift as keyof typeof shiftTotals;
 
         if (shiftTotals[shiftKey]) {
             shiftTotals[shiftKey].hn += hn;
             shiftTotals[shiftKey].rn += rn;
-            shiftTotals[shiftKey].tn += tn;
+            shiftTotals[shiftKey].pn += pn;
             shiftTotals[shiftKey].na += na;
         }
         totalHN += hn;
         totalRnOnly += rn;
-        totalTN += tn;
+        totalPN += pn;
         totalNA += na;
     });
 
     const totalRN = totalHN + totalRnOnly;
-    const totalNonRN = totalTN + totalNA;
+    const totalNonRN = totalPN + totalNA;
 
     // Aggregate summaries
     let totalWorkforce = 0, totalPatientDay = 0, totalProd = 0, totalCMI = 0;
@@ -113,10 +114,16 @@ async function getIPDDashboard(date: string, wardId: string | null) {
     const wardData: { name: string; prod: number }[] = [];
 
     summaries.forEach(s => {
-        totalWorkforce += s.totalStaffDay ?? 0;
-        totalPatientDay += s.patientDay ?? 0;
-        const prod = parseFloat(s.productivity ?? '0');
+        const staffDay = s.totalStaffDay ?? 0;
+        const ptDay = s.patientDay ?? 0;
+        totalWorkforce += staffDay;
+        totalPatientDay += ptDay;
+
+        // Calculate productivity using shared formula (same as /input/ipd)
+        const hppd = calcIPDHppd(staffDay, ptDay);
+        const prod = calcIPDProductivity(staffDay, ptDay, hppd);
         if (prod > 0) { totalProd += prod; prodCount++; }
+
         totalCMI += parseFloat(s.cmi ?? '0');
 
         const cap = (s.capStatus ?? '').toLowerCase();
@@ -137,11 +144,11 @@ async function getIPDDashboard(date: string, wardId: string | null) {
         cmi: prodCount > 0 ? parseFloat((totalCMI / prodCount).toFixed(2)) : 0,
         patientVisit: totalPatientDay,
         shifts: {
-            morning: { rn: shiftTotals.morning.hn + shiftTotals.morning.rn, nonRn: shiftTotals.morning.tn + shiftTotals.morning.na, hn: shiftTotals.morning.hn, rnOnly: shiftTotals.morning.rn, tn: shiftTotals.morning.tn, na: shiftTotals.morning.na },
-            afternoon: { rn: shiftTotals.afternoon.hn + shiftTotals.afternoon.rn, nonRn: shiftTotals.afternoon.tn + shiftTotals.afternoon.na, hn: shiftTotals.afternoon.hn, rnOnly: shiftTotals.afternoon.rn, tn: shiftTotals.afternoon.tn, na: shiftTotals.afternoon.na },
-            midnight: { rn: shiftTotals.night.hn + shiftTotals.night.rn, nonRn: shiftTotals.night.tn + shiftTotals.night.na, hn: shiftTotals.night.hn, rnOnly: shiftTotals.night.rn, tn: shiftTotals.night.tn, na: shiftTotals.night.na },
+            morning: { rn: shiftTotals.morning.hn + shiftTotals.morning.rn, nonRn: shiftTotals.morning.pn + shiftTotals.morning.na, hn: shiftTotals.morning.hn, rnOnly: shiftTotals.morning.rn, pn: shiftTotals.morning.pn, na: shiftTotals.morning.na },
+            afternoon: { rn: shiftTotals.afternoon.hn + shiftTotals.afternoon.rn, nonRn: shiftTotals.afternoon.pn + shiftTotals.afternoon.na, hn: shiftTotals.afternoon.hn, rnOnly: shiftTotals.afternoon.rn, pn: shiftTotals.afternoon.pn, na: shiftTotals.afternoon.na },
+            midnight: { rn: shiftTotals.night.hn + shiftTotals.night.rn, nonRn: shiftTotals.night.pn + shiftTotals.night.na, hn: shiftTotals.night.hn, rnOnly: shiftTotals.night.rn, pn: shiftTotals.night.pn, na: shiftTotals.night.na },
         },
-        workforce: { rn: totalRN, nonRn: totalNonRN, hn: totalHN, rnOnly: totalRnOnly, tn: totalTN, na: totalNA },
+        workforce: { rn: totalRN, nonRn: totalNonRN, hn: totalHN, rnOnly: totalRnOnly, pn: totalPN, na: totalNA },
         skillMix: {
             total: totalRN + totalNonRN,
             onDuty: totalRN + totalNonRN,

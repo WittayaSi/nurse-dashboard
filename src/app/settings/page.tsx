@@ -65,6 +65,26 @@ export default function SettingsPage() {
             disabled: opdCount === 0,
             badge: opdCount === 0 ? 'ยังไม่มี Ward OPD — ไม่สามารถ Export ได้' : null,
         },
+        {
+            href: '/settings/missing-data',
+            icon: 'fa-regular fa-bell',
+            title: 'สอดส่องการบันทึกข้อมูล',
+            desc: 'ตรวจสอบหน่วยงานที่ยังไม่ส่งข้อมูลกำลังคน IPD และ OPD (Missing Data)',
+            gradient: 'from-amber-500 to-orange-500',
+            bg: 'bg-amber-50',
+            disabled: false,
+            badge: null,
+        },
+        {
+            href: '/settings/monthly-report',
+            icon: 'fa-solid fa-chart-column',
+            title: 'รายงานสรุปประจำเดือน',
+            desc: 'สรุปข้อมูลยอดผู้ป่วย ภาระงาน และการประเมินประจำเดือน',
+            gradient: 'from-blue-600 to-indigo-600',
+            bg: 'bg-blue-50',
+            disabled: false,
+            badge: null,
+        },
     ];
 
     return (

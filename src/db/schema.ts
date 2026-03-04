@@ -39,7 +39,7 @@ export const ipdDailyShifts = pgTable('ipd_daily_shifts', {
     shift: varchar('shift', { length: 10 }).notNull(), // morning, afternoon, night
     hnCount: integer('hn_count').default(0),
     rnCount: integer('rn_count').default(0),
-    tnCount: integer('tn_count').default(0),
+    pnCount: integer('pn_count').default(0),
     naCount: integer('na_count').default(0),
     createdAt: timestamp('created_at').defaultNow(),
     updatedAt: timestamp('updated_at').defaultNow(),

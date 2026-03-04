@@ -32,7 +32,7 @@ export async function PUT(
     try {
         const { id } = await params;
         const body = await request.json();
-        const { code, name, deptType, opdFieldsConfig } = body;
+        const { code, name, deptType, opdFieldsConfig, hisWardKeys } = body;
 
         const result = await db.update(nursingWards)
             .set({
@@ -40,6 +40,7 @@ export async function PUT(
                 ...(name && { name }),
                 ...(deptType && { deptType }),
                 ...(opdFieldsConfig !== undefined && { opdFieldsConfig }),
+                ...(hisWardKeys !== undefined && { hisWardKeys }),
                 updatedAt: new Date(),
             })
             .where(eq(nursingWards.id, parseInt(id)))

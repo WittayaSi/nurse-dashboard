@@ -49,6 +49,8 @@ export default function WardSettingsPage() {
     const [mapWardId, setMapWardId] = useState<number | null>(null);
     const [mapHisKeys, setMapHisKeys] = useState<number[]>([]);
 
+    const [deleteConfirm, setDeleteConfirm] = useState<{ id: number, name: string } | null>(null);
+
     // Workload config editor
     const [configWardId, setConfigWardId] = useState<number | null>(null);
     const [configGroups, setConfigGroups] = useState<FieldGroup[]>([]);
@@ -157,15 +159,23 @@ export default function WardSettingsPage() {
         }
     };
 
-    const handleDelete = async (id: number, name: string) => {
-        if (!confirm(`ต้องการลบ "${name}" หรือไม่?`)) return;
+    const confirmDelete = (id: number, name: string) => {
+        setDeleteConfirm({ id, name });
+    };
+
+    const executeDelete = async () => {
+        if (!deleteConfirm) return;
+        setSaving(true);
         try {
-            const res = await fetch(`/api/wards/${id}`, { method: 'DELETE' });
+            const res = await fetch(`/api/wards/${deleteConfirm.id}`, { method: 'DELETE' });
             if (!res.ok) throw new Error('Failed to delete');
             setMessage({ type: 'success', text: '✅ ลบสำเร็จ!' });
             await loadWards();
         } catch (err: any) {
             setMessage({ type: 'error', text: `❌ ${err.message}` });
+        } finally {
+            setSaving(false);
+            setDeleteConfirm(null);
         }
     };
 
@@ -347,9 +357,9 @@ export default function WardSettingsPage() {
                             className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-100 transition-colors">
                             <i className="fa-solid fa-pen"></i>
                         </button>
-                        <button onClick={() => handleDelete(w.id, w.name)}
-                            className="px-3 py-1.5 bg-red-50 text-red-500 rounded-lg text-xs font-bold hover:bg-red-100 transition-colors">
-                            <i className="fa-solid fa-trash"></i>
+                        <button onClick={() => confirmDelete(w.id, w.name)}
+                            className="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 transition-colors">
+                            <i className="fa-solid fa-trash-can"></i>
                         </button>
                     </div>
                 </>
@@ -693,6 +703,41 @@ export default function WardSettingsPage() {
                         )}
                     </div>
                 </>
+            )}
+
+            {/* Delete Confirmation Dialog */}
+            {deleteConfirm && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-fadeIn">
+                        <div className="p-6 text-center">
+                            <div className="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <i className="fa-solid fa-triangle-exclamation text-3xl"></i>
+                            </div>
+                            <h3 className="text-xl font-bold text-gray-800 mb-2">ยืนยันการลบ?</h3>
+                            <p className="text-gray-500 text-sm mb-6">
+                                ต้องการลบหน่วยงาน <strong className="text-red-600">"{deleteConfirm.name}"</strong> ใช่หรือไม่?<br />
+                                <span className="text-xs">การกระทำนี้ข้อมูลจะถูกลบถาวร</span>
+                            </p>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setDeleteConfirm(null)}
+                                    disabled={saving}
+                                    className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors"
+                                >
+                                    ยกเลิก
+                                </button>
+                                <button
+                                    onClick={executeDelete}
+                                    disabled={saving}
+                                    className="flex-1 px-4 py-2.5 bg-red-500 text-white font-bold rounded-xl hover:bg-red-600 transition-colors flex justify-center items-center gap-2"
+                                >
+                                    {saving ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-trash-can"></i>}
+                                    ยืนยันลบ
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

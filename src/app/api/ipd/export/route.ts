@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
             shift: ipdDailyShifts.shift,
             hnCount: ipdDailyShifts.hnCount,
             rnCount: ipdDailyShifts.rnCount,
-            tnCount: ipdDailyShifts.tnCount,
+            pnCount: ipdDailyShifts.pnCount,
             naCount: ipdDailyShifts.naCount,
         })
             .from(ipdDailyShifts)
@@ -128,14 +128,14 @@ export async function GET(request: NextRequest) {
             const sheetName = ward.name.length > 31 ? ward.name.substring(0, 31) : ward.name;
             const ws = workbook.addWorksheet(sheetName);
 
-            // Columns: วันที่ | เวร | HN | RN | TN | NA | รวม | Pt/Day | HPPD | D/C | รับใหม่ | Productivity | CMI | CAP
+            // Columns: วันที่ | เวร | HN | RN | PN | NA | รวม | Pt/Day | HPPD | D/C | รับใหม่ | Productivity | CMI | CAP
             const totalCols = 14;
             ws.columns = [
                 { width: 8 },   // วันที่
                 { width: 5 },   // เวร
                 { width: 7 },   // HN
                 { width: 7 },   // RN
-                { width: 7 },   // TN
+                { width: 7 },   // PN
                 { width: 7 },   // NA
                 { width: 8 },   // รวม
                 { width: 9 },   // Pt/Day
@@ -175,7 +175,7 @@ export async function GET(request: NextRequest) {
             ws.getRow(2).height = 22;
 
             // Row 3: Sub-headers
-            const subHeaders = ['วันที่', 'เวร', 'HN', 'RN', 'TN', 'NA', 'รวม', 'Pt/Day', 'HPPD', 'D/C', 'รับใหม่', 'Productivity\n%', 'CMI', 'CAP'];
+            const subHeaders = ['วันที่', 'เวร', 'HN', 'RN', 'PN', 'NA', 'รวม', 'Pt/Day', 'HPPD', 'D/C', 'รับใหม่', 'Productivity\n%', 'CMI', 'CAP'];
             const row3 = ws.getRow(3);
             subHeaders.forEach((header, i) => {
                 const cell = row3.getCell(i + 1);
@@ -201,14 +201,14 @@ export async function GET(request: NextRequest) {
                     const s = dateShifts[shiftKey];
                     const hn = s?.hnCount || 0;
                     const rn = s?.rnCount || 0;
-                    const tn = s?.tnCount || 0;
+                    const pn = s?.pnCount || 0;
                     const na = s?.naCount || 0;
-                    const total = hn + rn + tn + na;
+                    const total = hn + rn + pn + na;
 
                     const rowData: any[] = [
                         '',
                         shiftLabelMap[shiftKey],
-                        hn || '', rn || '', tn || '', na || '',
+                        hn || '', rn || '', pn || '', na || '',
                         total || '',
                         '', '', '', '', '', '', '',
                     ];

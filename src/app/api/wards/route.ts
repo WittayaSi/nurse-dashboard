@@ -19,7 +19,28 @@ export async function GET(request: NextRequest) {
                 .orderBy(nursingWards.code);
         }
 
-        return NextResponse.json(result);
+        // Fetch all dim_wards to map bedCount
+        const { Pool } = require('pg');
+        const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+        try {
+            const dimWardsRes = await pool.query("SELECT ward_key, bed_count FROM dim_ward");
+            const dimWardsMap = new Map();
+            dimWardsRes.rows.forEach((dw: any) => {
+                dimWardsMap.set(dw.ward_key, parseInt(dw.bed_count || '0', 10));
+            });
+
+            const enrichedResult = result.map(ward => {
+                let bedCount = 0;
+                if (ward.hisWardKeys && Array.isArray(ward.hisWardKeys)) {
+                    bedCount = ward.hisWardKeys.reduce((sum, key) => sum + (dimWardsMap.get(key) || 0), 0);
+                }
+                return { ...ward, bedCount };
+            });
+
+            return NextResponse.json(enrichedResult);
+        } finally {
+            pool.end();
+        }
     } catch (error: any) {
         console.error('Error fetching wards:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
