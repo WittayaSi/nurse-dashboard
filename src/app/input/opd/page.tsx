@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import LoadingOverlay from '@/components/LoadingOverlay';
@@ -107,6 +107,14 @@ function LoadingSkeleton() {
 }
 
 export default function OPDInputPage() {
+    return (
+        <Suspense fallback={<LoadingSkeleton />}>
+            <OPDInputContent />
+        </Suspense>
+    );
+}
+
+function OPDInputContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const initDate = searchParams.get('date') || new Date().toISOString().split('T')[0];
