@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { opdDailyShifts, nursingWards } from '@/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
+import { nowBangkok, getClientIp } from '@/lib/timezone';
 
 // GET - List OPD shifts (filter by date, ward_id)
 export async function GET(request: NextRequest) {
@@ -47,6 +48,7 @@ export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
         const rows = Array.isArray(body) ? body : [body];
+        const clientIp = getClientIp(request);
 
         for (const row of rows) {
             if (!row.wardId || !row.recordDate || !row.shift) {
@@ -106,6 +108,9 @@ export async function POST(request: NextRequest) {
                 // New flexible data
                 categoryData: Object.keys(categoryData).length > 0 ? categoryData : null,
                 workloadScore: workload.toFixed(2),
+                createdAt: nowBangkok(),
+                updatedAt: nowBangkok(),
+                lastModifiedIp: clientIp,
             };
         });
 
@@ -120,7 +125,8 @@ export async function POST(request: NextRequest) {
 
                     categoryData: sql`excluded.category_data`,
                     workloadScore: sql`excluded.workload_score`,
-                    updatedAt: new Date(),
+                    updatedAt: nowBangkok(),
+                    lastModifiedIp: clientIp,
                 },
             })
             .returning();

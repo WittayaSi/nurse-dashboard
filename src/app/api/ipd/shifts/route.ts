@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { ipdDailyShifts, nursingWards } from '@/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
+import { nowBangkok, getClientIp } from '@/lib/timezone';
 
 // GET - List IPD shifts (filter by date, ward_id)
 export async function GET(request: NextRequest) {
@@ -45,6 +46,7 @@ export async function POST(request: NextRequest) {
 
         // Support both single object and array
         const rows = Array.isArray(body) ? body : [body];
+        const clientIp = getClientIp(request);
 
         for (const row of rows) {
             if (!row.wardId || !row.recordDate || !row.shift) {
@@ -63,6 +65,9 @@ export async function POST(request: NextRequest) {
             rnCount: row.rnCount ?? 0,
             pnCount: row.pnCount ?? 0,
             naCount: row.naCount ?? 0,
+            createdAt: nowBangkok(),
+            updatedAt: nowBangkok(),
+            lastModifiedIp: clientIp,
         }));
 
         const result = await db.insert(ipdDailyShifts)
@@ -74,7 +79,8 @@ export async function POST(request: NextRequest) {
                     rnCount: sql`excluded.rn_count`,
                     pnCount: sql`excluded.pn_count`,
                     naCount: sql`excluded.na_count`,
-                    updatedAt: new Date(),
+                    updatedAt: nowBangkok(),
+                    lastModifiedIp: clientIp,
                 },
             })
             .returning();

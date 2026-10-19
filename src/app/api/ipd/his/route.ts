@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
+import { pool } from '@/db';
 import { nursingWards, factVisits } from '@/db/schema';
 import { eq, sql, inArray, and, lte, gt, isNull, or } from 'drizzle-orm';
-import { Pool } from 'pg';
 
 export async function POST(req: Request) {
     try {
@@ -73,9 +73,8 @@ export async function POST(req: Request) {
                 )
             );
 
-        // 4. Get total bed count from dim_ward
+        // 4. Get total bed count from dim_ward (ใช้ shared pool แทนสร้างใหม่)
         let totalBeds = 0;
-        const pool = new Pool({ connectionString: process.env.DATABASE_URL });
         try {
             const bedResult = await pool.query(
                 `SELECT COALESCE(SUM(bed_count), 0) as total_beds FROM dim_ward WHERE ward_key = ANY($1::int[])`,
@@ -84,8 +83,6 @@ export async function POST(req: Request) {
             totalBeds = parseInt(bedResult.rows[0].total_beds, 10);
         } catch (err) {
             console.error("Error fetching bed count:", err);
-        } finally {
-            pool.end();
         }
 
         return NextResponse.json({

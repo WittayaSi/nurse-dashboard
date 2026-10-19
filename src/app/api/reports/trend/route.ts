@@ -3,6 +3,7 @@ import { db } from '@/db';
 import { ipdDailySummary, opdDailyShifts, nursingWards } from '@/db/schema';
 import { eq, and, gte, lte } from 'drizzle-orm';
 import { calcOPDProductivity } from '@/lib/opd-calc';
+import { calcIPDHppd, calcIPDProductivity } from '@/lib/ipd-calc';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +19,13 @@ export async function GET(request: Request) {
 
         const wardId = parseInt(wardIdStr);
         const days = parseInt(daysStr);
+
+        if (isNaN(wardId)) {
+            return NextResponse.json({ error: 'Invalid wardId parameter' }, { status: 400 });
+        }
+        if (isNaN(days) || days < 1 || days > 365) {
+            return NextResponse.json({ error: 'Invalid days parameter (1-365)' }, { status: 400 });
+        }
 
         // Calculate date range
         const endDateObj = new Date();
@@ -45,9 +53,11 @@ export async function GET(request: Request) {
         }
 
         if (deptType === 'IPD' || deptType === 'BOTH') {
+            // Recalculate productivity from raw data (same as Dashboard)
             const ipdData = await db.select({
                 recordDate: ipdDailySummary.recordDate,
-                productivity: ipdDailySummary.productivity
+                totalStaffDay: ipdDailySummary.totalStaffDay,
+                patientDay: ipdDailySummary.patientDay,
             })
             .from(ipdDailySummary)
             .where(
@@ -60,7 +70,11 @@ export async function GET(request: Request) {
 
             ipdData.forEach(row => {
                 if (dateMap[row.recordDate] !== undefined) {
-                    dateMap[row.recordDate] = parseFloat(row.productivity as string || '0');
+                    const staffDay = row.totalStaffDay ?? 0;
+                    const ptDay = row.patientDay ?? 0;
+                    const hppd = calcIPDHppd(staffDay, ptDay);
+                    const prod = calcIPDProductivity(staffDay, ptDay, hppd);
+                    dateMap[row.recordDate] = prod;
                 }
             });
         } 

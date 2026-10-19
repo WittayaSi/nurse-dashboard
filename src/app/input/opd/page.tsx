@@ -452,10 +452,10 @@ function OPDInputContent() {
             {/* Header */}
             <header className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
-                    <button onClick={() => router.back()} className="text-gray-400 hover:text-indigo-600 transition-colors"
-                        aria-label="ย้อนกลับ">
+                    <Link href="/" className="text-gray-400 hover:text-rose-600 transition-colors p-1"
+                        aria-label="กลับ Dashboard" title="กลับ Dashboard">
                         <i className="fa-solid fa-arrow-left text-lg"></i>
-                    </button>
+                    </Link>
                     <div className="bg-gradient-to-r from-rose-600 to-orange-500 p-3 rounded-xl shadow-lg text-white" aria-hidden="true">
                         <i className="fa-solid fa-truck-medical text-xl"></i>
                     </div>

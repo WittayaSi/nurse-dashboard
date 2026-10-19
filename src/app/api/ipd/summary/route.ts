@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { ipdDailySummary, nursingWards } from '@/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
+import { nowBangkok, getClientIp } from '@/lib/timezone';
 
 // GET - List IPD daily summary (filter by date, ward_id)
 export async function GET(request: NextRequest) {
@@ -46,6 +47,7 @@ export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
         const rows = Array.isArray(body) ? body : [body];
+        const clientIp = getClientIp(request);
 
         for (const row of rows) {
             if (!row.wardId || !row.recordDate) {
@@ -67,6 +69,9 @@ export async function POST(request: NextRequest) {
             productivity: row.productivity?.toString() ?? '0',
             cmi: row.cmi?.toString() ?? '0',
             capStatus: row.capStatus ?? 'suitable',
+            createdAt: nowBangkok(),
+            updatedAt: nowBangkok(),
+            lastModifiedIp: clientIp,
         }));
 
         const result = await db.insert(ipdDailySummary)
@@ -82,7 +87,8 @@ export async function POST(request: NextRequest) {
                     productivity: sql`excluded.productivity`,
                     cmi: sql`excluded.cmi`,
                     capStatus: sql`excluded.cap_status`,
-                    updatedAt: new Date(),
+                    updatedAt: nowBangkok(),
+                    lastModifiedIp: clientIp,
                 },
             })
             .returning();

@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { ipdDailyShifts, ipdDailySummary } from '@/db/schema';
 import { sql } from 'drizzle-orm';
+import { nowBangkok, getClientIp } from '@/lib/timezone';
 
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
         const { shifts, summary } = body;
+        const clientIp = getClientIp(request);
 
         if (!shifts || !Array.isArray(shifts) || !summary) {
              return NextResponse.json(
@@ -41,6 +43,9 @@ export async function POST(request: NextRequest) {
             rnCount: row.rnCount ?? 0,
             pnCount: row.pnCount ?? 0,
             naCount: row.naCount ?? 0,
+            createdAt: nowBangkok(),
+            updatedAt: nowBangkok(),
+            lastModifiedIp: clientIp,
         }));
 
         const summaryValue = {
@@ -54,6 +59,9 @@ export async function POST(request: NextRequest) {
             productivity: summary.productivity?.toString() ?? '0',
             cmi: summary.cmi?.toString() ?? '0',
             capStatus: summary.capStatus ?? 'suitable',
+            createdAt: nowBangkok(),
+            updatedAt: nowBangkok(),
+            lastModifiedIp: clientIp,
         };
 
         // Use transaction to ensure both shifts and summary are saved successfully or rollback entirely
@@ -68,7 +76,8 @@ export async function POST(request: NextRequest) {
                         rnCount: sql`excluded.rn_count`,
                         pnCount: sql`excluded.pn_count`,
                         naCount: sql`excluded.na_count`,
-                        updatedAt: new Date(),
+                        updatedAt: nowBangkok(),
+                        lastModifiedIp: clientIp,
                     },
                 });
 
@@ -86,7 +95,8 @@ export async function POST(request: NextRequest) {
                         productivity: sql`excluded.productivity`,
                         cmi: sql`excluded.cmi`,
                         capStatus: sql`excluded.cap_status`,
-                        updatedAt: new Date(),
+                        updatedAt: nowBangkok(),
+                        lastModifiedIp: clientIp,
                     },
                 })
                 .returning();

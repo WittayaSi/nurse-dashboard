@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Sarabun } from "next/font/google";
 import "./globals.css";
 import "@fortawesome/fontawesome-free/css/all.min.css";
+import AppShell from "@/components/AppShell";
 
 const sarabun = Sarabun({
   weight: ['300', '400', '500', '600', '700'],
@@ -23,7 +24,9 @@ export default function RootLayout({
   return (
     <html lang="th">
       <body className={`${sarabun.variable} antialiased`}>
-        {children}
+        <AppShell>
+          {children}
+        </AppShell>
       </body>
     </html>
   );

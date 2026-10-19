@@ -42,6 +42,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: true, settings });
     } catch (error: any) {
         console.error('Error saving settings:', error);
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+        return NextResponse.json({ success: false, error: 'Internal Server Error' }, { status: 500 });
     }
 }

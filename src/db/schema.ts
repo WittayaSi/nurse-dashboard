@@ -10,7 +10,10 @@ import {
     unique,
     jsonb,
 } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
+
+// ใช้ now() AT TIME ZONE เพื่อบังคับให้ PostgreSQL คืนเวลาไทยเสมอ
+const nowBangkok = sql`now() AT TIME ZONE 'Asia/Bangkok'`;
 
 // ==========================================
 // nursing_wards - หอผู้ป่วย / หน่วยงาน
@@ -25,8 +28,9 @@ export const nursingWards = pgTable('nursing_wards', {
     opdFieldsConfig: jsonb('opd_fields_config'),
     // Array of DW dimension ward_key integers (e.g., [3, 7])
     hisWardKeys: jsonb('his_ward_keys').$type<number[]>(),
-    createdAt: timestamp('created_at').defaultNow(),
-    updatedAt: timestamp('updated_at').defaultNow(),
+    createdAt: timestamp('created_at').default(nowBangkok),
+    updatedAt: timestamp('updated_at').default(nowBangkok),
+    lastModifiedIp: varchar('last_modified_ip', { length: 45 }),
 });
 
 // ==========================================
@@ -41,8 +45,9 @@ export const ipdDailyShifts = pgTable('ipd_daily_shifts', {
     rnCount: integer('rn_count').default(0),
     pnCount: integer('pn_count').default(0),
     naCount: integer('na_count').default(0),
-    createdAt: timestamp('created_at').defaultNow(),
-    updatedAt: timestamp('updated_at').defaultNow(),
+    createdAt: timestamp('created_at').default(nowBangkok),
+    updatedAt: timestamp('updated_at').default(nowBangkok),
+    lastModifiedIp: varchar('last_modified_ip', { length: 45 }),
 }, (table) => [
     unique('ipd_shift_unique').on(table.wardId, table.recordDate, table.shift),
 ]);
@@ -62,8 +67,9 @@ export const ipdDailySummary = pgTable('ipd_daily_summary', {
     productivity: numeric('productivity', { precision: 5, scale: 2 }).default('0'),
     cmi: numeric('cmi', { precision: 5, scale: 2 }).default('0'),
     capStatus: varchar('cap_status', { length: 20 }).default('suitable'),
-    createdAt: timestamp('created_at').defaultNow(),
-    updatedAt: timestamp('updated_at').defaultNow(),
+    createdAt: timestamp('created_at').default(nowBangkok),
+    updatedAt: timestamp('updated_at').default(nowBangkok),
+    lastModifiedIp: varchar('last_modified_ip', { length: 45 }),
 }, (table) => [
     unique('ipd_summary_unique').on(table.wardId, table.recordDate),
 ]);
@@ -89,8 +95,9 @@ export const opdDailyShifts = pgTable('opd_daily_shifts', {
     // Workload Score (คำนวณ)
     workloadScore: numeric('workload_score', { precision: 8, scale: 2 }).default('0'),
 
-    createdAt: timestamp('created_at').defaultNow(),
-    updatedAt: timestamp('updated_at').defaultNow(),
+    createdAt: timestamp('created_at').default(nowBangkok),
+    updatedAt: timestamp('updated_at').default(nowBangkok),
+    lastModifiedIp: varchar('last_modified_ip', { length: 45 }),
 }, (table) => [
     unique('opd_shift_unique').on(table.wardId, table.recordDate, table.shift),
 ]);

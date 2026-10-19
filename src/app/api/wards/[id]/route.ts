@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { nursingWards } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+import { nowBangkok, getClientIp } from '@/lib/timezone';
 
 // GET - Get a single ward by ID
 export async function GET(
@@ -10,8 +11,10 @@ export async function GET(
 ) {
     try {
         const { id } = await params;
+        const wardId = parseInt(id);
+        if (isNaN(wardId)) return NextResponse.json({ error: 'Invalid ward ID' }, { status: 400 });
         const result = await db.select().from(nursingWards)
-            .where(eq(nursingWards.id, parseInt(id)));
+            .where(eq(nursingWards.id, wardId));
 
         if (result.length === 0) {
             return NextResponse.json({ error: 'Ward not found' }, { status: 404 });
@@ -20,7 +23,7 @@ export async function GET(
         return NextResponse.json(result[0]);
     } catch (error: any) {
         console.error('Error fetching ward:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }
 
@@ -34,6 +37,9 @@ export async function PUT(
         const body = await request.json();
         const { code, name, deptType, opdFieldsConfig, hisWardKeys } = body;
 
+        const wardId = parseInt(id);
+        if (isNaN(wardId)) return NextResponse.json({ error: 'Invalid ward ID' }, { status: 400 });
+
         const result = await db.update(nursingWards)
             .set({
                 ...(code && { code }),
@@ -41,9 +47,10 @@ export async function PUT(
                 ...(deptType && { deptType }),
                 ...(opdFieldsConfig !== undefined && { opdFieldsConfig }),
                 ...(hisWardKeys !== undefined && { hisWardKeys }),
-                updatedAt: new Date(),
+                updatedAt: nowBangkok(),
+                lastModifiedIp: getClientIp(request),
             })
-            .where(eq(nursingWards.id, parseInt(id)))
+            .where(eq(nursingWards.id, wardId))
             .returning();
 
         if (result.length === 0) {
@@ -53,7 +60,7 @@ export async function PUT(
         return NextResponse.json(result[0]);
     } catch (error: any) {
         console.error('Error updating ward:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }
 
@@ -65,8 +72,11 @@ export async function DELETE(
     try {
         const { id } = await params;
 
+        const wardId = parseInt(id);
+        if (isNaN(wardId)) return NextResponse.json({ error: 'Invalid ward ID' }, { status: 400 });
+
         const result = await db.delete(nursingWards)
-            .where(eq(nursingWards.id, parseInt(id)))
+            .where(eq(nursingWards.id, wardId))
             .returning();
 
         if (result.length === 0) {
@@ -76,7 +86,7 @@ export async function DELETE(
         return NextResponse.json({ success: true });
     } catch (error: any) {
         console.error('Error deleting ward:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }
 

@@ -125,6 +125,13 @@ export default function Dashboard() {
 
     const wardOptions = wards.map(w => ({ id: w.id, name: w.name }));
 
+    // Check if workforce data exists
+    const hasWorkforceData = (
+        data.shifts.morning.rn + data.shifts.morning.nonRn +
+        data.shifts.afternoon.rn + data.shifts.afternoon.nonRn +
+        data.shifts.midnight.rn + data.shifts.midnight.nonRn
+    ) > 0;
+
     return (
         <div className="px-4 py-1 md:px-6 md:py-2 min-h-screen">
             <LoadingOverlay isLoading={loading} />
@@ -147,46 +154,56 @@ export default function Dashboard() {
 
                         {/* Hero Cards */}
                         <div className="grid grid-cols-2 gap-4">
-                            <HeroCard
-                                title="Productivity"
-                                value={`${data.productivity}%`}
-                                subtitle="Target"
-                                target={`${target}%`}
-                                icon="fa-solid fa-chart-line"
-                                gradient="linear-gradient(135deg, #0d9488 0%, #14b8a6 50%, #2dd4bf 100%)"
-                                belowTarget={data.productivity > 0 && data.productivity < target}
-                            />
-                            {dept === 'IPD' ? (
+                            <div data-tooltip="Productivity = (คาดการณ์ ÷ จริง) × 100" className="animate-slideUp stagger-1">
                                 <HeroCard
-                                    title="CMI"
-                                    value={data.cmi}
-                                    subtitle="Case Mix Index"
-                                    icon="fa-solid fa-weight-scale"
-                                    gradient="linear-gradient(135deg, #7c3aed 0%, #8b5cf6 50%, #a78bfa 100%)"
+                                    title="Productivity"
+                                    value={`${data.productivity}%`}
+                                    subtitle="Target"
+                                    target={`${target}%`}
+                                    icon="fa-solid fa-chart-line"
+                                    gradient="linear-gradient(135deg, #0d9488 0%, #14b8a6 50%, #2dd4bf 100%)"
+                                    belowTarget={data.productivity > 0 && data.productivity < target}
                                 />
-                            ) : (
-                                <HeroCard
-                                    title="Patient Visit"
-                                    value={data.patientVisit.toLocaleString()}
-                                    subtitle="ผู้ป่วยต่อวัน"
-                                    icon="fa-solid fa-user-group"
-                                    gradient="linear-gradient(135deg, #7c3aed 0%, #8b5cf6 50%, #a78bfa 100%)"
-                                />
-                            )}
+                            </div>
+                            <div className="animate-slideUp stagger-2">
+                                {dept === 'IPD' ? (
+                                    <div data-tooltip="CMI = ค่าเฉลี่ยน้ำหนักสัมพันธ์ผู้ป่วย">
+                                        <HeroCard
+                                            title="CMI"
+                                            value={data.cmi}
+                                            subtitle="Case Mix Index"
+                                            icon="fa-solid fa-weight-scale"
+                                            gradient="linear-gradient(135deg, #7c3aed 0%, #8b5cf6 50%, #a78bfa 100%)"
+                                        />
+                                    </div>
+                                ) : (
+                                    <div data-tooltip="จำนวนผู้ป่วยนอกที่มาใช้บริการต่อวัน">
+                                        <HeroCard
+                                            title="Patient Visit"
+                                            value={data.patientVisit.toLocaleString()}
+                                            subtitle="ผู้ป่วยต่อวัน"
+                                            icon="fa-solid fa-user-group"
+                                            gradient="linear-gradient(135deg, #7c3aed 0%, #8b5cf6 50%, #a78bfa 100%)"
+                                        />
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         {/* Workforce Card */}
-                        <StatCard
-                            title="Total Workforce"
-                            value={data.totalWorkforce.toLocaleString()}
-                            subtitle="พยาบาลทั้งหมด"
-                            icon="fa-solid fa-users"
-                            colorClass="text-indigo-600"
-                            bgClass="bg-indigo-100"
-                        />
+                        <div className="animate-slideUp stagger-3" data-tooltip="จำนวนบุคลากรพยาบาลทั้งหมดที่ปฏิบัติงาน">
+                            <StatCard
+                                title="Total Workforce"
+                                value={data.totalWorkforce.toLocaleString()}
+                                subtitle="พยาบาลทั้งหมด"
+                                icon="fa-solid fa-users"
+                                colorClass="text-indigo-600"
+                                bgClass="bg-indigo-100"
+                            />
+                        </div>
 
                         {/* Workforce Status Header */}
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between animate-slideUp stagger-4">
                             <div className="flex items-center gap-2">
                                 <div className="w-1.5 h-6 bg-gradient-to-b from-pink-500 to-pink-600 rounded-full"></div>
                                 <h2 className="font-bold text-gray-800">Workforce Status</h2>
@@ -196,85 +213,101 @@ export default function Dashboard() {
 
                         {/* Workforce Status Table (Conditional by Dept) */}
                         <div className="flex flex-col gap-4">
-                            <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
-                                {dept === 'IPD' ? (
-                                    <table className="w-full text-sm text-left">
-                                        <thead className="bg-gradient-to-r from-gray-50 to-gray-100 text-gray-600 font-semibold">
-                                            <tr>
-                                                <th className="px-4 py-3">เวร (Shift)</th>
-                                                <th className="px-4 py-3 text-center"><span className="text-indigo-600">HN</span></th>
-                                                <th className="px-4 py-3 text-center"><span className="text-pink-600">RN</span></th>
-                                                <th className="px-4 py-3 text-center"><span className="text-teal-600">PN</span></th>
-                                                <th className="px-4 py-3 text-center"><span className="text-amber-600">NA</span></th>
-                                                <th className="px-4 py-3 text-center">รวม</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-100">
-                                            <tr className="hover:bg-orange-50/50">
-                                                <td className="px-4 py-3 font-semibold text-gray-700">☀️ เช้า</td>
-                                                <td className="px-4 py-3 text-center font-bold text-indigo-600">{data.shifts.morning.hn || 0}</td>
-                                                <td className="px-4 py-3 text-center font-bold text-pink-600">{data.shifts.morning.rnOnly || 0}</td>
-                                                <td className="px-4 py-3 text-center font-bold text-teal-600">{data.shifts.morning.pn || 0}</td>
-                                                <td className="px-4 py-3 text-center font-bold text-amber-600">{data.shifts.morning.na || 0}</td>
-                                                <td className="px-4 py-3 text-center font-bold text-gray-800 bg-gray-50">{data.shifts.morning.rn + data.shifts.morning.nonRn}</td>
-                                            </tr>
-                                            <tr className="hover:bg-blue-50/50">
-                                                <td className="px-4 py-3 font-semibold text-gray-700">🌤️ บ่าย</td>
-                                                <td className="px-4 py-3 text-center font-bold text-indigo-600">{data.shifts.afternoon.hn || 0}</td>
-                                                <td className="px-4 py-3 text-center font-bold text-pink-600">{data.shifts.afternoon.rnOnly || 0}</td>
-                                                <td className="px-4 py-3 text-center font-bold text-teal-600">{data.shifts.afternoon.pn || 0}</td>
-                                                <td className="px-4 py-3 text-center font-bold text-amber-600">{data.shifts.afternoon.na || 0}</td>
-                                                <td className="px-4 py-3 text-center font-bold text-gray-800 bg-gray-50">{data.shifts.afternoon.rn + data.shifts.afternoon.nonRn}</td>
-                                            </tr>
-                                            <tr className="hover:bg-indigo-50/50">
-                                                <td className="px-4 py-3 font-semibold text-gray-700">🌙 ดึก</td>
-                                                <td className="px-4 py-3 text-center font-bold text-indigo-600">{data.shifts.midnight.hn || 0}</td>
-                                                <td className="px-4 py-3 text-center font-bold text-pink-600">{data.shifts.midnight.rnOnly || 0}</td>
-                                                <td className="px-4 py-3 text-center font-bold text-teal-600">{data.shifts.midnight.pn || 0}</td>
-                                                <td className="px-4 py-3 text-center font-bold text-amber-600">{data.shifts.midnight.na || 0}</td>
-                                                <td className="px-4 py-3 text-center font-bold text-gray-800 bg-gray-50">{data.shifts.midnight.rn + data.shifts.midnight.nonRn}</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                ) : (
-                                    <table className="w-full text-sm text-left">
-                                        <thead className="bg-gradient-to-r from-gray-50 to-gray-100 text-gray-600 font-semibold">
-                                            <tr>
-                                                <th className="px-4 py-3">เวร (Shift)</th>
-                                                <th className="px-4 py-3 text-center"><span className="text-pink-600">RN</span></th>
-                                                <th className="px-4 py-3 text-center"><span className="text-amber-600">Non-RN</span></th>
-                                                <th className="px-4 py-3 text-center">รวม</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-100">
-                                            {(data.shifts.morning.rn + data.shifts.morning.nonRn > 0 || ward === 'all') && (
-                                                <tr className="hover:bg-orange-50/50">
+                            {hasWorkforceData ? (
+                                <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
+                                    {dept === 'IPD' ? (
+                                        <table className="w-full text-sm text-left">
+                                            <thead className="bg-gradient-to-r from-gray-50 to-gray-100 text-gray-600 font-semibold">
+                                                <tr>
+                                                    <th className="px-4 py-3">เวร (Shift)</th>
+                                                    <th className="px-4 py-3 text-center"><span className="text-indigo-600">HN</span></th>
+                                                    <th className="px-4 py-3 text-center"><span className="text-pink-600">RN</span></th>
+                                                    <th className="px-4 py-3 text-center"><span className="text-teal-600">PN</span></th>
+                                                    <th className="px-4 py-3 text-center"><span className="text-amber-600">NA</span></th>
+                                                    <th className="px-4 py-3 text-center">รวม</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-100">
+                                                <tr className="hover:bg-orange-50/50 transition-colors">
                                                     <td className="px-4 py-3 font-semibold text-gray-700">☀️ เช้า</td>
-                                                    <td className="px-4 py-3 text-center font-bold text-pink-600">{data.shifts.morning.rn}</td>
-                                                    <td className="px-4 py-3 text-center font-bold text-amber-600">{data.shifts.morning.nonRn}</td>
+                                                    <td className="px-4 py-3 text-center font-bold text-indigo-600">{data.shifts.morning.hn || 0}</td>
+                                                    <td className="px-4 py-3 text-center font-bold text-pink-600">{data.shifts.morning.rnOnly || 0}</td>
+                                                    <td className="px-4 py-3 text-center font-bold text-teal-600">{data.shifts.morning.pn || 0}</td>
+                                                    <td className="px-4 py-3 text-center font-bold text-amber-600">{data.shifts.morning.na || 0}</td>
                                                     <td className="px-4 py-3 text-center font-bold text-gray-800 bg-gray-50">{data.shifts.morning.rn + data.shifts.morning.nonRn}</td>
                                                 </tr>
-                                            )}
-                                            {(data.shifts.afternoon.rn + data.shifts.afternoon.nonRn > 0 || ward === 'all') && (
-                                                <tr className="hover:bg-blue-50/50">
+                                                <tr className="hover:bg-blue-50/50 transition-colors">
                                                     <td className="px-4 py-3 font-semibold text-gray-700">🌤️ บ่าย</td>
-                                                    <td className="px-4 py-3 text-center font-bold text-pink-600">{data.shifts.afternoon.rn}</td>
-                                                    <td className="px-4 py-3 text-center font-bold text-amber-600">{data.shifts.afternoon.nonRn}</td>
+                                                    <td className="px-4 py-3 text-center font-bold text-indigo-600">{data.shifts.afternoon.hn || 0}</td>
+                                                    <td className="px-4 py-3 text-center font-bold text-pink-600">{data.shifts.afternoon.rnOnly || 0}</td>
+                                                    <td className="px-4 py-3 text-center font-bold text-teal-600">{data.shifts.afternoon.pn || 0}</td>
+                                                    <td className="px-4 py-3 text-center font-bold text-amber-600">{data.shifts.afternoon.na || 0}</td>
                                                     <td className="px-4 py-3 text-center font-bold text-gray-800 bg-gray-50">{data.shifts.afternoon.rn + data.shifts.afternoon.nonRn}</td>
                                                 </tr>
-                                            )}
-                                            {(data.shifts.midnight.rn + data.shifts.midnight.nonRn > 0 || ward === 'all') && (
-                                                <tr className="hover:bg-indigo-50/50">
+                                                <tr className="hover:bg-indigo-50/50 transition-colors">
                                                     <td className="px-4 py-3 font-semibold text-gray-700">🌙 ดึก</td>
-                                                    <td className="px-4 py-3 text-center font-bold text-pink-600">{data.shifts.midnight.rn}</td>
-                                                    <td className="px-4 py-3 text-center font-bold text-amber-600">{data.shifts.midnight.nonRn}</td>
+                                                    <td className="px-4 py-3 text-center font-bold text-indigo-600">{data.shifts.midnight.hn || 0}</td>
+                                                    <td className="px-4 py-3 text-center font-bold text-pink-600">{data.shifts.midnight.rnOnly || 0}</td>
+                                                    <td className="px-4 py-3 text-center font-bold text-teal-600">{data.shifts.midnight.pn || 0}</td>
+                                                    <td className="px-4 py-3 text-center font-bold text-amber-600">{data.shifts.midnight.na || 0}</td>
                                                     <td className="px-4 py-3 text-center font-bold text-gray-800 bg-gray-50">{data.shifts.midnight.rn + data.shifts.midnight.nonRn}</td>
                                                 </tr>
-                                            )}
-                                        </tbody>
-                                    </table>
-                                )}
-                            </div>
+                                            </tbody>
+                                        </table>
+                                    ) : (
+                                        <table className="w-full text-sm text-left">
+                                            <thead className="bg-gradient-to-r from-gray-50 to-gray-100 text-gray-600 font-semibold">
+                                                <tr>
+                                                    <th className="px-4 py-3">เวร (Shift)</th>
+                                                    <th className="px-4 py-3 text-center"><span className="text-pink-600">RN</span></th>
+                                                    <th className="px-4 py-3 text-center"><span className="text-amber-600">Non-RN</span></th>
+                                                    <th className="px-4 py-3 text-center">รวม</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-100">
+                                                {(data.shifts.morning.rn + data.shifts.morning.nonRn > 0 || ward === 'all') && (
+                                                    <tr className="hover:bg-orange-50/50 transition-colors">
+                                                        <td className="px-4 py-3 font-semibold text-gray-700">☀️ เช้า</td>
+                                                        <td className="px-4 py-3 text-center font-bold text-pink-600">{data.shifts.morning.rn}</td>
+                                                        <td className="px-4 py-3 text-center font-bold text-amber-600">{data.shifts.morning.nonRn}</td>
+                                                        <td className="px-4 py-3 text-center font-bold text-gray-800 bg-gray-50">{data.shifts.morning.rn + data.shifts.morning.nonRn}</td>
+                                                    </tr>
+                                                )}
+                                                {(data.shifts.afternoon.rn + data.shifts.afternoon.nonRn > 0 || ward === 'all') && (
+                                                    <tr className="hover:bg-blue-50/50 transition-colors">
+                                                        <td className="px-4 py-3 font-semibold text-gray-700">🌤️ บ่าย</td>
+                                                        <td className="px-4 py-3 text-center font-bold text-pink-600">{data.shifts.afternoon.rn}</td>
+                                                        <td className="px-4 py-3 text-center font-bold text-amber-600">{data.shifts.afternoon.nonRn}</td>
+                                                        <td className="px-4 py-3 text-center font-bold text-gray-800 bg-gray-50">{data.shifts.afternoon.rn + data.shifts.afternoon.nonRn}</td>
+                                                    </tr>
+                                                )}
+                                                {(data.shifts.midnight.rn + data.shifts.midnight.nonRn > 0 || ward === 'all') && (
+                                                    <tr className="hover:bg-indigo-50/50 transition-colors">
+                                                        <td className="px-4 py-3 font-semibold text-gray-700">🌙 ดึก</td>
+                                                        <td className="px-4 py-3 text-center font-bold text-pink-600">{data.shifts.midnight.rn}</td>
+                                                        <td className="px-4 py-3 text-center font-bold text-amber-600">{data.shifts.midnight.nonRn}</td>
+                                                        <td className="px-4 py-3 text-center font-bold text-gray-800 bg-gray-50">{data.shifts.midnight.rn + data.shifts.midnight.nonRn}</td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    )}
+                                </div>
+                            ) : (
+                                /* Empty State for Workforce Table */
+                                <div className="empty-state">
+                                    <i className="fa-solid fa-clipboard-list"></i>
+                                    <h4>ยังไม่มีข้อมูลกำลังคน</h4>
+                                    <p>ยังไม่มีการบันทึกข้อมูลเวรสำหรับวันที่เลือก</p>
+                                    <Link
+                                        href={dept === 'IPD' ? '/input/ipd' : '/input/opd'}
+                                        className="mt-4 inline-flex items-center gap-2 bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold transition-colors shadow-md"
+                                    >
+                                        <i className="fa-solid fa-pen-to-square"></i>
+                                        กรอกข้อมูล {dept}
+                                    </Link>
+                                </div>
+                            )}
 
                             {/* Staff Mix Ratio */}
                             <div className="card-kpi p-5 flex items-center justify-between">

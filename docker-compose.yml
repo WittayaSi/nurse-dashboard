@@ -1,0 +1,19 @@
+services:
+  nurse-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nurse-dashboard
+    restart: always
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - HOSTNAME=0.0.0.0
+      - TZ=Asia/Bangkok
+      - DATABASE_URL=${DATABASE_URL}
+    env_file:
+      - .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
