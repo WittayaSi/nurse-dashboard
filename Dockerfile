@@ -6,20 +6,19 @@ FROM node:20-alpine AS base
 RUN apk add --no-cache libc6-compat tzdata
 ENV TZ=Asia/Bangkok
 
+# Install pnpm 9 globally directly (reliable, avoids corepack version mismatch)
+RUN npm install -g pnpm@9
+
 # 2. Dependencies
 FROM base AS deps
 WORKDIR /app
 
-RUN corepack enable pnpm
-
 COPY package.json pnpm-lock.yaml* ./
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 
 # 3. Builder
 FROM base AS builder
 WORKDIR /app
-
-RUN corepack enable pnpm
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
