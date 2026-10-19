@@ -6,8 +6,10 @@ FROM node:20-alpine AS base
 RUN apk add --no-cache libc6-compat tzdata
 ENV TZ=Asia/Bangkok
 
-# Install pnpm 9 globally directly (reliable, avoids corepack version mismatch)
-RUN npm install -g pnpm@9
+# Pin pnpm 9.12.3 explicitly in base
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN npm install -g pnpm@9.12.3
 
 # 2. Dependencies
 FROM base AS deps
